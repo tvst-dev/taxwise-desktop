@@ -1,0 +1,26 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="256" height="256" rx="48" fill="#0D1117"/>
+  
+  <!-- Calculator Body -->
+  <rect x="48" y="32" width="160" height="192" rx="16" fill="#161B22" stroke="#2563EB" stroke-width="4"/>
+  
+  <!-- Display Screen -->
+  <rect x="64" y="48" width="128" height="40" rx="8" fill="#0D1117"/>
+  <text x="176" y="78" font-family="Arial" font-size="24" font-weight="bold" fill="#22C55E" text-anchor="end">₦</text>
+  
+  <!-- Buttons Grid -->
+  <rect x="64" y="100" width="28" height="28" rx="6" fill="#21262D"/>
+  <rect x="100" y="100" width="28" height="28" rx="6" fill="#21262D"/>
+  <rect x="136" y="100" width="28" height="28" rx="6" fill="#21262D"/>
+  <rect x="172" y="100" width="20" height="28" rx="6" fill="#F59E0B"/>
+  
+  <rect x="64" y="136" width="28" height="28" rx="6" fill="#21262D"/>
+  <rect x="100" y="136" width="28" height="28" rx="6" fill="#21262D"/>
+  <rect x="136" y="136" width="28" height="28" rx="6" fill="#21262D"/>
+  <rect x="172" y="136" width="20" height="28" rx="6" fill="#3B82F6"/>
+  
+  <rect x="64" y="172" width="28" height="28" rx="6" fill="#22C55E"/>
+  <rect x="100" y="172" width="28" height="28" rx="6" fill="#21262D"/>
+  <rect x="136" y="172" width="56" height="28" rx="6" fill="#2563EB"/>
+</svg>

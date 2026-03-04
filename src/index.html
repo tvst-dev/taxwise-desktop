@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.paystack.co https://checkout.paystack.com https://*.paystack.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://paystack.com https://*.paystack.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.paystack.co https://*.paystack.com https://api.openai.com https://api.withmono.com; img-src 'self' data: blob: https:; frame-src 'self' https://js.paystack.co https://checkout.paystack.com https://*.paystack.com https://connect.mono.co;">
+  <title>TaxWise - Nigerian Tax Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body, #root {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background-color: #0D1117;
+      color: #E6EDF3;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #161B22;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #30363D;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #484F58;
+    }
+    .app-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #0D1117;
+    }
+    .app-loading .spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid #30363D;
+      border-top-color: #2563EB;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .app-loading .text {
+      margin-top: 16px;
+      color: #8B949E;
+      font-size: 14px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="app-loading">
+      <div class="spinner"></div>
+      <div class="text">Loading TaxWise...</div>
+    </div>
+  </div>
+</body>
+</html>
+```
+
+**The key change is in the `connect-src` directive:**
+
+Before:
+```
+connect-src 'self' https://api.paystack.co https://api.openai.com https://api.withmono.com
+```
+
+After:
+```
+connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.paystack.co https://api.openai.com https://api.withmono.com

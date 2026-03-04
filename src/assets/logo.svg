@@ -1,0 +1,41 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="#0D1117"/>
+  <circle cx="256" cy="256" r="240" stroke="#2563EB" stroke-width="8"/>
+  
+  <!-- Calculator Body -->
+  <rect x="136" y="96" width="240" height="320" rx="24" fill="#161B22" stroke="#30363D" stroke-width="4"/>
+  
+  <!-- Display Screen -->
+  <rect x="160" y="120" width="192" height="64" rx="12" fill="#0D1117" stroke="#2563EB" stroke-width="2"/>
+  
+  <!-- Display Text (₦ symbol) -->
+  <text x="320" y="166" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#22C55E" text-anchor="end">₦</text>
+  
+  <!-- Calculator Buttons Row 1 -->
+  <rect x="160" y="200" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="212" y="200" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="264" y="200" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="316" y="200" width="36" height="40" rx="8" fill="#F59E0B"/>
+  
+  <!-- Calculator Buttons Row 2 -->
+  <rect x="160" y="252" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="212" y="252" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="264" y="252" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="316" y="252" width="36" height="40" rx="8" fill="#3B82F6"/>
+  
+  <!-- Calculator Buttons Row 3 -->
+  <rect x="160" y="304" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="212" y="304" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="264" y="304" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="316" y="304" width="36" height="40" rx="8" fill="#3B82F6"/>
+  
+  <!-- Calculator Buttons Row 4 -->
+  <rect x="160" y="356" width="40" height="40" rx="8" fill="#22C55E"/>
+  <rect x="212" y="356" width="40" height="40" rx="8" fill="#21262D"/>
+  <rect x="264" y="356" width="88" height="40" rx="8" fill="#2563EB"/>
+  
+  <!-- TaxWise Badge -->
+  <rect x="176" y="416" width="160" height="24" rx="6" fill="#2563EB"/>
+  <text x="256" y="433" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">TAXWISE</text>
+</svg>

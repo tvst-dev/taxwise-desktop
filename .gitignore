@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Local SQLite database (runtime data, not source)
+database/taxwise.db
+
+# Claude Code project settings (local tooling only)
+.claude/
+
+# Build output (webpack bundles — run `npm run build` to regenerate)
+dist/
+
+# Electron builder output (uploaded separately to GitHub Releases)
+release/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment files (if ever added)
+.env
+.env.local
+.env.*.local

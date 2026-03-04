@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="TaxWise — Nigeria's most advanced tax management software. PAYE, VAT, WHT & CIT calculations with FIRS-compliant reporting. Built for Nigerian SMEs." />
+  <meta property="og:title" content="TaxWise — Nigerian Tax Management Software" />
+  <meta property="og:description" content="Automate your Nigerian tax compliance. PAYE, VAT, WHT, CIT calculations, AI document scanning, and team management — all in one desktop app." />
+  <meta property="og:type" content="website" />
+  <title>TaxWise — Nigerian Tax Management Software</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════════════
+       RESET & VARIABLES
+    ═══════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    :root {
+      --bg:           #060A14;
+      --bg2:          #0A0F1E;
+      --surface:      rgba(255,255,255,0.03);
+      --surface-s:    rgba(255,255,255,0.05);
+      --border:       rgba(255,255,255,0.07);
+      --border-hi:    rgba(255,255,255,0.13);
+      --text:         #E2E8F0;
+      --muted:        #94A3B8;
+      --dim:          #64748B;
+      --blue:         #3B82F6;
+      --blue-dk:      #2563EB;
+      --blue-glow:    rgba(59,130,246,0.22);
+      --purple:       #8B5CF6;
+      --purple-glow:  rgba(139,92,246,0.2);
+      --green:        #10B981;
+      --green-glow:   rgba(16,185,129,0.18);
+      --amber:        #F59E0B;
+      --red:          #EF4444;
+      --radius:       14px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
+    /* ═══════════════════════════════════════════════
+       BACKGROUND BLOBS
+    ═══════════════════════════════════════════════ */
+    .bg-blobs {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 0; overflow: hidden;
+    }
+    .blob {
+      position: absolute; border-radius: 50%;
+      filter: blur(100px); opacity: 0.1;
+      animation: blobFloat 14s ease-in-out infinite;
+    }
+    .blob-1 { width:700px;height:700px;background:var(--blue);    top:-200px;  right:-100px; animation-delay:0s;  }
+    .blob-2 { width:500px;height:500px;background:var(--purple);  bottom:15%;  left:-120px;  animation-delay:-5s; }
+    .blob-3 { width:350px;height:350px;background:var(--green);   top:55%;     right:8%;     animation-delay:-9s; opacity:0.06; }
+    @keyframes blobFloat {
+      0%,100% { transform:translate(0,0) scale(1); }
+      33%      { transform:translate(28px,-18px) scale(1.04); }
+      66%      { transform:translate(-18px,14px) scale(0.96); }
+    }
+
+    /* ═══════════════════════════════════════════════
+       NAVBAR
+    ═══════════════════════════════════════════════ */
+    #navbar {
+      position: fixed; top:0; left:0; right:0; z-index:90;
+      padding: 14px 0;
+      transition: background .3s, border-color .3s, backdrop-filter .3s;
+    }
+    #navbar.scrolled {
+      background: rgba(6,10,20,0.88);
+      backdrop-filter: blur(24px) saturate(1.5);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto; padding: 0 28px;
+      display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 11px; text-decoration: none; flex-shrink: 0;
+    }
+    .nav-logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--blue-dk) 0%, var(--purple) 100%);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 900; color: #fff;
+      box-shadow: 0 4px 14px var(--blue-glow);
+    }
+    .nav-logo-name { font-size: 19px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
+    .nav-links { display: flex; align-items: center; gap: 30px; list-style: none; }
+    .nav-links a {
+      font-size: 14px; font-weight: 500; color: var(--muted);
+      text-decoration: none; transition: color .15s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-dl {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 20px;
+      background: var(--blue-dk); border-radius: 8px;
+      color: #fff; font-size: 14px; font-weight: 600;
+      text-decoration: none; white-space: nowrap;
+      transition: transform .15s, box-shadow .15s, opacity .15s;
+      box-shadow: 0 4px 14px var(--blue-glow);
+    }
+    .nav-dl:hover { transform: translateY(-1px); box-shadow: 0 7px 22px var(--blue-glow); }
+
+    /* ═══════════════════════════════════════════════
+       CONTAINER
+    ═══════════════════════════════════════════════ */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+
+    /* ═══════════════════════════════════════════════
+       HERO
+    ═══════════════════════════════════════════════ */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center;
+      padding: 130px 0 80px;
+    }
+    .hero-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 72px; align-items: center;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px;
+      background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.18);
+      border-radius: 100px; font-size: 13px; font-weight: 500; color: #93C5FD;
+      margin-bottom: 22px;
+    }
+    .badge-dot {
+      width: 6px; height: 6px; background: var(--blue); border-radius: 50%;
+      animation: blink 2s ease infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
+
+    .hero h1 {
+      font-size: clamp(38px, 4.5vw, 62px);
+      font-weight: 900; line-height: 1.08; letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+    .grad { background: linear-gradient(135deg, #60A5FA 0%, #A78BFA 55%, #34D399 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+    .hero-sub {
+      font-size: 17px; color: var(--muted); line-height: 1.8;
+      margin-bottom: 36px; max-width: 470px;
+    }
+    .hero-btns { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 44px; }
+    .btn-hero {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, var(--blue-dk) 0%, #1E40AF 100%);
+      border-radius: 10px; color: #fff; font-size: 16px; font-weight: 700;
+      text-decoration: none; border: none; cursor: pointer;
+      transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 6px 24px var(--blue-glow);
+    }
+    .btn-hero:hover { transform: translateY(-3px); box-shadow: 0 12px 36px var(--blue-glow); }
+    .btn-hero-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 22px;
+      background: var(--surface); border: 1px solid var(--border-hi);
+      border-radius: 10px; color: var(--muted); font-size: 15px; font-weight: 500;
+      text-decoration: none; transition: border-color .15s, color .15s, transform .15s;
+    }
+    .btn-hero-ghost:hover { border-color: var(--muted); color: var(--text); transform: translateY(-1px); }
+
+    .hero-trust {
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    }
+    .hero-trust-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--dim);
+    }
+    .trust-icon { color: var(--green); font-size: 13px; }
+
+    /* ── App Mockup ── */
+    .app-window {
+      border-radius: 14px; overflow: hidden;
+      background: #0C1220;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 30px 90px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.05);
+      position: relative;
+    }
+    .app-window::after {
+      content:''; position:absolute; inset:0; pointer-events:none;
+      background: linear-gradient(135deg, rgba(59,130,246,0.05) 0%, transparent 60%);
+      border-radius: inherit;
+    }
+    .win-bar {
+      background: #131C2E; padding: 11px 14px;
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .tl { width:10px;height:10px;border-radius:50%; }
+    .tl-r{background:#FF5F57;} .tl-y{background:#FEBC2E;} .tl-g{background:#28C840;}
+    .win-bar-title { flex:1; text-align:center; font-size:11px; color:rgba(255,255,255,0.25); margin-left:-38px; }
+    .win-body { display: flex; height: 370px; }
+    .win-sidebar {
+      width: 50px; background: #090E1B;
+      border-right: 1px solid rgba(255,255,255,0.05);
+      display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 4px;
+    }
+    .wsi {
+      width: 34px; height: 34px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; color: rgba(255,255,255,0.22);
+      transition: background .2s;
+    }
+    .wsi.on { background: rgba(59,130,246,0.14); color: var(--blue); }
+    .win-main { flex:1; padding: 14px; display: flex; flex-direction: column; gap: 11px; overflow: hidden; }
+    .wm-header { display:flex; align-items:center; justify-content:space-between; }
+    .wm-title { font-size: 12px; font-weight: 700; color: var(--text); }
+    .wm-date { font-size: 10px; color: var(--dim); }
+    .wm-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+    .wm-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 7px; padding: 9px;
+    }
+    .wm-card-lbl { font-size: 8px; color: var(--dim); text-transform: uppercase; letter-spacing:.06em; margin-bottom:4px; }
+    .wm-card-val { font-size: 13px; font-weight: 700; color: var(--text); }
+    .wm-card-val.g { color: #34D399; } .wm-card-val.r { color: #F87171; } .wm-card-val.b { color: #60A5FA; }
+    .wm-chart {
+      flex:1; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 7px; padding: 10px; display:flex; flex-direction:column; gap: 7px;
+    }
+    .wm-chart-lbl { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing:.07em; }
+    .wm-bars { flex:1; display: flex; align-items: flex-end; gap: 5px; }
+    .wm-bg { flex:1; display:flex; align-items:flex-end; gap:2px; height:100%; }
+    .wm-b { flex:1; border-radius: 3px 3px 0 0; min-height:3px; }
+    .wm-b.inc { background: rgba(59,130,246,0.65); } .wm-b.exp { background: rgba(239,68,68,0.45); }
+    .wm-entries { display:flex; flex-direction:column; gap:5px; }
+    .wm-entry {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:6px 8px;
+      background:rgba(255,255,255,0.02); border-radius:5px; font-size:10px;
+    }
+    .wm-e-name { color: var(--muted); } .wm-e-amt { font-weight:600; }
+    .wm-e-amt.g{color:#34D399;} .wm-e-amt.r{color:#F87171;}
+
+    /* ═══════════════════════════════════════════════
+       STATS BAND
+    ═══════════════════════════════════════════════ */
+    .stats-band {
+      padding: 28px 0;
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      position: relative; z-index: 1;
+    }
+    .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); }
+    .stat-item { text-align:center; padding: 14px 20px; border-right: 1px solid var(--border); }
+    .stat-item:last-child { border-right: none; }
+    .stat-num { font-size: 30px; font-weight: 900; color: var(--text); line-height:1; margin-bottom:5px; letter-spacing:-.02em; }
+    .stat-num em { font-style:normal; color: var(--blue); }
+    .stat-lbl { font-size: 13px; color: var(--muted); }
+
+    /* ═══════════════════════════════════════════════
+       SECTION COMMONS
+    ═══════════════════════════════════════════════ */
+    .section { padding: 96px 0; position: relative; z-index: 1; }
+    .section-label {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 12px; font-weight: 700; color: var(--blue);
+      text-transform: uppercase; letter-spacing: .1em; margin-bottom: 14px;
+    }
+    .section-label::before { content:''; width:16px; height:1px; background:var(--blue); }
+    .section-title {
+      font-size: clamp(28px,4vw,44px); font-weight: 900;
+      line-height: 1.12; letter-spacing: -.025em; margin-bottom: 14px;
+    }
+    .section-sub { font-size: 17px; color: var(--muted); line-height: 1.8; max-width: 560px; }
+    .section-head { text-align:center; margin-bottom: 60px; }
+    .section-head .section-sub { margin: 0 auto; }
+
+    /* ═══════════════════════════════════════════════
+       FEATURES GRID
+    ═══════════════════════════════════════════════ */
+    .feat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+    .feat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 26px 24px;
+      transition: border-color .2s, transform .25s, box-shadow .25s;
+      opacity: 0; transform: translateY(22px);
+    }
+    .feat-card.vis {
+      opacity: 1; transform: translateY(0);
+      transition: opacity .55s ease, transform .55s ease, border-color .2s, box-shadow .25s;
+    }
+    .feat-card:hover { border-color: var(--border-hi); transform: translateY(-5px); box-shadow: 0 14px 40px rgba(0,0,0,.35); }
+    .feat-icon {
+      width: 46px; height: 46px; border-radius: 11px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; margin-bottom: 16px;
+    }
+    .feat-card h3 { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .feat-card p  { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ═══════════════════════════════════════════════
+       SPOTLIGHT SECTIONS
+    ═══════════════════════════════════════════════ */
+    .spotlight { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .spotlight + .spotlight { margin-top: 80px; }
+    .spot-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px; border-radius: 100px;
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+      margin-bottom: 18px;
+    }
+    .spot-content h2 {
+      font-size: clamp(24px,3vw,36px); font-weight: 900;
+      line-height: 1.18; letter-spacing: -.025em; margin-bottom: 14px;
+    }
+    .spot-content p { font-size: 15px; color: var(--muted); line-height: 1.8; margin-bottom: 22px; }
+    .check-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .check-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+    .chk { width: 20px; height: 20px; border-radius: 50%; background: rgba(16,185,129,0.12); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; }
+
+    .spot-visual {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px;
+      display: flex; flex-direction: column; gap: 10px; min-height: 300px;
+    }
+
+    /* Tax calc mock */
+    .calc-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px; font-size: 13px;
+    }
+    .calc-lbl { color: var(--muted); }
+    .calc-val { font-weight: 700; color: var(--text); }
+    .calc-val.g { color: #34D399; } .calc-val.r { color: #F87171; } .calc-val.b { color: #60A5FA; }
+    .calc-row.tot {
+      background: rgba(59,130,246,0.07); border-color: rgba(59,130,246,0.18);
+      margin-top: 4px;
+    }
+    .calc-row.tot .calc-lbl { color: var(--text); font-weight: 700; }
+    .calc-row.tot .calc-val { font-size: 17px; }
+
+    /* Document AI mock */
+    .doc-drop {
+      border: 1.5px dashed rgba(59,130,246,0.25); border-radius: 10px;
+      padding: 18px; text-align: center; color: var(--dim); font-size: 12px;
+    }
+    .doc-drop .ddi { font-size: 26px; margin-bottom: 6px; }
+    .ai-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 6px;
+      background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2);
+      font-size: 11px; color: #C4B5FD; font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .ext-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px;
+      background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.1);
+      border-radius: 7px; font-size: 12px;
+    }
+    .ext-k { color: var(--muted); } .ext-v { color: #34D399; font-weight: 700; }
+
+    /* ═══════════════════════════════════════════════
+       HOW IT WORKS
+    ═══════════════════════════════════════════════ */
+    .steps-grid {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 32px; position: relative;
+    }
+    .steps-grid::before {
+      content:''; position:absolute; top:27px;
+      left: calc(16.66% + 16px); right: calc(16.66% + 16px);
+      height: 1px; background: linear-gradient(90deg, transparent, var(--border-hi), transparent);
+    }
+    .step { display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; opacity:0; transform:translateY(22px); }
+    .step.vis { opacity:1; transform:translateY(0); transition: opacity .55s ease, transform .55s ease; }
+    .step-num {
+      width: 54px; height: 54px; border-radius: 50%;
+      background: var(--surface); border: 1px solid var(--border-hi);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 19px; font-weight: 900; color: var(--blue); position: relative; z-index: 1;
+    }
+    .step h3 { font-size: 16px; font-weight: 700; color: var(--text); }
+    .step p  { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ═══════════════════════════════════════════════
+       PRICING
+    ═══════════════════════════════════════════════ */
+    .pricing-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 22px; max-width: 820px; margin: 0 auto; }
+    .price-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 36px 32px; position: relative;
+      opacity: 0; transform: translateY(22px);
+    }
+    .price-card.vis { opacity:1; transform:translateY(0); transition: opacity .55s ease, transform .55s ease, box-shadow .25s; }
+    .price-card:hover { transform: translateY(-6px); box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+    .price-card.pop {
+      border-color: rgba(59,130,246,0.35);
+      background: linear-gradient(145deg, rgba(37,99,235,0.07) 0%, rgba(139,92,246,0.04) 100%);
+      box-shadow: 0 0 0 1px rgba(59,130,246,0.12), 0 8px 40px rgba(37,99,235,0.1);
+    }
+    .pop-tag {
+      position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(90deg, var(--blue-dk), var(--purple));
+      color: #fff; padding: 5px 20px; border-radius: 100px;
+      font-size: 12px; font-weight: 700; white-space: nowrap;
+    }
+    .plan-name { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .09em; margin-bottom: 10px; }
+    .plan-price { margin-bottom: 6px; }
+    .plan-price .cur { font-size: 20px; font-weight: 700; color: var(--muted); vertical-align: top; margin-top: 10px; display: inline-block; }
+    .plan-price .amt { font-size: 48px; font-weight: 900; color: var(--text); line-height: 1; letter-spacing: -.03em; }
+    .plan-price .per { font-size: 14px; color: var(--dim); }
+    .plan-desc { font-size: 14px; color: var(--muted); margin: 14px 0 22px; line-height: 1.7; }
+    .plan-feats { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+    .plan-feats li { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--muted); }
+    .pf-icon { color: var(--green); font-size: 13px; flex-shrink: 0; }
+    .plan-btn {
+      display: block; width: 100%; padding: 13px; text-align: center;
+      border-radius: 10px; font-size: 15px; font-weight: 700;
+      text-decoration: none; cursor: pointer; border: none; transition: opacity .15s, transform .1s;
+    }
+    .plan-btn.ghost { background: transparent; border: 1px solid var(--border-hi); color: var(--muted); }
+    .plan-btn.ghost:hover { border-color: var(--muted); color: var(--text); }
+    .plan-btn.solid { background: linear-gradient(135deg, var(--blue-dk), var(--blue)); color: #fff; box-shadow: 0 4px 16px var(--blue-glow); }
+    .plan-btn.solid:hover { opacity: .92; transform: translateY(-1px); }
+
+    /* ═══════════════════════════════════════════════
+       DOWNLOAD CTA
+    ═══════════════════════════════════════════════ */
+    #download {
+      text-align: center; padding: 120px 0;
+      background: linear-gradient(180deg, transparent 0%, rgba(37,99,235,0.05) 40%, rgba(37,99,235,0.03) 70%, transparent 100%);
+      border-top: 1px solid var(--border);
+    }
+    .dl-super {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 100px;
+      background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.18);
+      font-size: 13px; font-weight: 600; color: #34D399; margin-bottom: 24px;
+    }
+    #download h2 {
+      font-size: clamp(32px,5vw,56px); font-weight: 900;
+      letter-spacing: -.03em; line-height: 1.08; margin-bottom: 16px;
+    }
+    #download p { font-size: 18px; color: var(--muted); margin-bottom: 44px; }
+    .dl-btn-main {
+      display: inline-flex; align-items: center; gap: 14px;
+      padding: 18px 44px;
+      background: linear-gradient(135deg, var(--blue-dk) 0%, #1E40AF 100%);
+      border-radius: 14px; color: #fff; font-size: 18px; font-weight: 800;
+      text-decoration: none;
+      transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 8px 32px var(--blue-glow);
+    }
+    .dl-btn-main:hover { transform: translateY(-4px); box-shadow: 0 18px 50px var(--blue-glow); }
+    .dl-btn-icon { font-size: 22px; }
+    .dl-meta {
+      margin-top: 22px; font-size: 13px; color: var(--dim);
+      display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap;
+    }
+    .dl-meta-item { display: flex; align-items: center; gap: 6px; }
+
+    /* ═══════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════ */
+    footer {
+      padding: 36px 0; border-top: 1px solid var(--border);
+      position: relative; z-index: 1;
+    }
+    .foot-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; flex-wrap: wrap;
+    }
+    .foot-brand { display: flex; align-items: center; gap: 10px; }
+    .foot-logo {
+      width: 30px; height: 30px; border-radius: 7px;
+      background: linear-gradient(135deg, var(--blue-dk), var(--purple));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 900; color: #fff;
+    }
+    .foot-name { font-size: 14px; font-weight: 700; color: var(--text); }
+    .foot-copy { font-size: 12px; color: var(--dim); margin-top: 2px; }
+    .foot-links { display: flex; gap: 22px; }
+    .foot-links a { font-size: 13px; color: var(--dim); text-decoration: none; transition: color .15s; }
+    .foot-links a:hover { color: var(--muted); }
+
+    /* ═══════════════════════════════════════════════
+       AUTH OVERLAY
+    ═══════════════════════════════════════════════ */
+    #auth-app {
+      position: fixed; inset: 0; background: var(--bg); z-index: 200;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 28px; overflow-y: auto;
+    }
+    .a-logo {
+      display: flex; align-items: center; gap: 12px;
+      text-decoration: none; margin-bottom: 34px;
+    }
+    .a-logo-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--blue-dk), var(--purple));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 900; color: #fff;
+      box-shadow: 0 4px 18px var(--blue-glow);
+    }
+    .a-logo-name { font-size: 24px; font-weight: 800; color: var(--text); }
+    .a-logo-sub  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .a-card {
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border-hi);
+      border-radius: 18px; padding: 38px 36px;
+      width: 100%; max-width: 430px;
+    }
+    .a-card-icon {
+      width: 52px; height: 52px; border-radius: 13px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin-bottom: 18px;
+    }
+    .a-card h2 { font-size: 21px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .a-card-sub { font-size: 14px; color: var(--muted); margin-bottom: 26px; line-height: 1.65; }
+    .a-group { margin-bottom: 18px; }
+    .a-group label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:7px; }
+    .a-input {
+      width: 100%; padding: 12px 15px;
+      background: rgba(0,0,0,.3); border: 1px solid var(--border-hi);
+      border-radius: 9px; color: var(--text); font-size: 15px;
+      font-family: inherit; outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .a-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.14); }
+    .a-input::placeholder { color: var(--dim); }
+    .pw-wrap { position: relative; }
+    .pw-wrap .a-input { padding-right: 44px; }
+    .pw-eye {
+      position: absolute; right: 13px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--muted); cursor: pointer; font-size: 17px; padding: 0;
+    }
+    .str-bar { display:flex; gap:3px; margin-top:7px; }
+    .str-seg { height:3px; flex:1; border-radius:2px; background:var(--border); transition:background .2s; }
+    .str-txt { font-size:11px; color:var(--muted); margin-top:5px; }
+    .a-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 13px;
+      background: var(--blue-dk); border: none; border-radius: 9px;
+      color: #fff; font-size: 15px; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: opacity .15s, transform .1s;
+    }
+    .a-btn:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+    .a-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .a-btn.green { background: var(--green); }
+    .a-btn-ghost {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 12px;
+      background: transparent; border: 1px solid var(--border-hi);
+      border-radius: 9px; color: var(--muted); font-size: 14px; font-weight: 500;
+      font-family: inherit; cursor: pointer; margin-top: 10px;
+      transition: border-color .15s, color .15s;
+    }
+    .a-btn-ghost:hover { border-color: var(--muted); color: var(--text); }
+    .a-alert {
+      padding: 11px 15px; border-radius: 8px; font-size: 13px;
+      margin-bottom: 18px; line-height: 1.5;
+    }
+    .a-alert.err { background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.22); color:#FCA5A5; }
+    .a-alert.ok  { background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.22); color:#86EFAC; }
+    .a-success-icon {
+      width: 70px; height: 70px; border-radius: 50%;
+      background: rgba(16,185,129,.1); border: 2px solid rgba(16,185,129,.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; margin: 0 auto 22px;
+    }
+    .a-hint { font-size: 12px; color: var(--dim); text-align: center; line-height: 1.6; margin-top: 10px; }
+    .a-hint a { color: var(--blue); text-decoration: none; }
+    .a-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+    .a-spinner {
+      width: 34px; height: 34px; border: 3px solid var(--border);
+      border-top-color: var(--blue); border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .a-loading { display:flex; flex-direction:column; align-items:center; gap:14px; color:var(--muted); font-size:15px; }
+
+    /* ═══════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════ */
+    @media (max-width: 960px) {
+      .hero-grid       { grid-template-columns: 1fr; gap: 56px; }
+      .app-window      { max-width: 520px; margin: 0 auto; }
+      .feat-grid       { grid-template-columns: repeat(2,1fr); }
+      .spotlight       { grid-template-columns: 1fr; gap: 40px; }
+      .spotlight.rev .spot-visual { order: -1; }
+      .stats-grid      { grid-template-columns: repeat(2,1fr); }
+      .stat-item:nth-child(2) { border-right: none; }
+      .stat-item:nth-child(3), .stat-item:nth-child(4) { border-top: 1px solid var(--border); }
+      .steps-grid      { grid-template-columns: 1fr; }
+      .steps-grid::before { display: none; }
+      .pricing-grid    { grid-template-columns: 1fr; max-width: 440px; }
+      .nav-links       { display: none; }
+    }
+    @media (max-width: 600px) {
+      .feat-grid { grid-template-columns: 1fr; }
+      .a-card    { padding: 28px 22px; }
+      .container { padding: 0 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     AUTH OVERLAY (shown when email link tokens detected)
+════════════════════════════════════════════════════ -->
+<div id="auth-app" style="display:none;"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     LANDING PAGE
+════════════════════════════════════════════════════ -->
+<div id="landing">
+
+  <!-- Background blobs -->
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <!-- ── Navbar ── -->
+  <nav id="navbar">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <div class="nav-logo-icon">₦</div>
+        <span class="nav-logo-name">TaxWise</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#download">Download</a></li>
+      </ul>
+      <a href="#download" class="nav-dl">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Free
+      </a>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-grid">
+        <!-- Left -->
+        <div>
+          <div class="hero-badge">
+            <span class="badge-dot"></span>
+            🇳🇬&nbsp; Built exclusively for Nigerian businesses
+          </div>
+          <h1>Nigeria's Most<br><span class="grad">Advanced Tax</span><br>Management App</h1>
+          <p class="hero-sub">
+            Automate PAYE, VAT, WHT and CIT calculations. Scan receipts with AI, manage your team, reconcile bank accounts — all in one offline-capable Windows desktop app.
+          </p>
+          <div class="hero-btns">
+            <a href="#download" class="btn-hero" id="hero-dl-btn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download for Windows
+            </a>
+            <a href="#features" class="btn-hero-ghost">
+              Explore features &rarr;
+            </a>
+          </div>
+          <div class="hero-trust">
+            <div class="hero-trust-item"><span class="trust-icon">✓</span> Free to download</div>
+            <div class="hero-trust-item"><span class="trust-icon">✓</span> FIRS-compliant calculations</div>
+            <div class="hero-trust-item"><span class="trust-icon">✓</span> Works offline</div>
+          </div>
+        </div>
+        <!-- Right: App Mockup -->
+        <div class="app-window">
+          <div class="win-bar">
+            <span class="tl tl-r"></span><span class="tl tl-y"></span><span class="tl tl-g"></span>
+            <span class="win-bar-title">TaxWise Desktop</span>
+          </div>
+          <div class="win-body">
+            <div class="win-sidebar">
+              <div class="wsi on">📊</div>
+              <div class="wsi">📝</div>
+              <div class="wsi">🧮</div>
+              <div class="wsi">📄</div>
+              <div class="wsi">🏦</div>
+              <div class="wsi">🛒</div>
+              <div class="wsi">⏰</div>
+              <div class="wsi">👥</div>
+            </div>
+            <div class="win-main">
+              <div class="wm-header">
+                <span class="wm-title">Dashboard</span>
+                <span class="wm-date">Feb 2025</span>
+              </div>
+              <div class="wm-cards">
+                <div class="wm-card">
+                  <div class="wm-card-lbl">Revenue</div>
+                  <div class="wm-card-val g">₦4.2M</div>
+                </div>
+                <div class="wm-card">
+                  <div class="wm-card-lbl">Tax Due</div>
+                  <div class="wm-card-val r">₦381K</div>
+                </div>
+                <div class="wm-card">
+                  <div class="wm-card-lbl">VAT</div>
+                  <div class="wm-card-val b">₦186K</div>
+                </div>
+              </div>
+              <div class="wm-chart">
+                <div class="wm-chart-lbl">Income vs Expenses — 2025</div>
+                <div class="wm-bars">
+                  <div class="wm-bg"><div class="wm-b inc" style="height:55%"></div><div class="wm-b exp" style="height:30%"></div></div>
+                  <div class="wm-bg"><div class="wm-b inc" style="height:70%"></div><div class="wm-b exp" style="height:45%"></div></div>
+                  <div class="wm-bg"><div class="wm-b inc" style="height:60%"></div><div class="wm-b exp" style="height:38%"></div></div>
+                  <div class="wm-bg"><div class="wm-b inc" style="height:85%"></div><div class="wm-b exp" style="height:50%"></div></div>
+                  <div class="wm-bg"><div class="wm-b inc" style="height:72%"></div><div class="wm-b exp" style="height:40%"></div></div>
+                  <div class="wm-bg"><div class="wm-b inc" style="height:90%"></div><div class="wm-b exp" style="height:55%"></div></div>
+                  <div class="wm-bg"><div class="wm-b inc" style="height:78%"></div><div class="wm-b exp" style="height:42%"></div></div>
+                </div>
+              </div>
+              <div class="wm-entries">
+                <div class="wm-entry">
+                  <span class="wm-e-name">Services Revenue</span>
+                  <span class="wm-e-amt g">+₦840,000</span>
+                </div>
+                <div class="wm-entry">
+                  <span class="wm-e-name">PAYE Remittance</span>
+                  <span class="wm-e-amt r">−₦120,450</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Stats Band ── -->
+  <div class="stats-band">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-num"><em>6</em> Tax Types</div>
+          <div class="stat-lbl">PAYE, VAT, WHT, CIT, CGT & Stamp Duty</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">100<em>%</em></div>
+          <div class="stat-lbl">FIRS-compliant calculations</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">AI<em>+</em></div>
+          <div class="stat-lbl">Receipt & invoice auto-extraction</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">₦<em>0</em></div>
+          <div class="stat-lbl">Cost to download & install</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Features ── -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-head">
+        <div class="section-label">Features</div>
+        <h2 class="section-title">Everything your business needs<br>to stay tax-compliant</h2>
+        <p class="section-sub">From PAYE calculations to AI-powered document scanning — TaxWise covers the full Nigerian tax compliance lifecycle.</p>
+      </div>
+      <div class="feat-grid">
+        <div class="feat-card">
+          <div class="feat-icon" style="background:rgba(59,130,246,0.1);">🧮</div>
+          <h3>PAYE & CIT Calculator</h3>
+          <p>Automatically compute monthly Personal Income Tax (PAYE) for any number of employees using FIRS tax bands and all applicable reliefs.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon" style="background:rgba(16,185,129,0.1);">📊</div>
+          <h3>VAT & WHT Reporting</h3>
+          <p>Generate FIRS-standard VAT and Withholding Tax reports. Track input/output VAT, compute net payable, and export ready-to-file returns.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon" style="background:rgba(139,92,246,0.1);">🤖</div>
+          <h3>Document AI Scanner</h3>
+          <p>Upload invoices, receipts, or bank statements. AI extracts the vendor, amount, date, and category — and creates journal entries automatically.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon" style="background:rgba(245,158,11,0.1);">👥</div>
+          <h3>Team Management</h3>
+          <p>Invite accountants, cashiers, and managers with granular role-based permissions. Track activity logs and manage access from one dashboard.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon" style="background:rgba(239,68,68,0.1);">🏦</div>
+          <h3>Bank Reconciliation</h3>
+          <p>Connect your Nigerian bank accounts via Mono. Import transactions automatically, match them to entries, and flag unreconciled items instantly.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon" style="background:rgba(6,182,212,0.1);">⏰</div>
+          <h3>Tax Deadline Reminders</h3>
+          <p>Never miss a FIRS filing deadline again. Set custom reminders for VAT, PAYE, WHT, and CIT due dates with desktop notifications.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Feature Spotlights ── -->
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+
+      <!-- Spotlight 1: Tax Calculations -->
+      <div class="spotlight">
+        <div class="spot-content">
+          <div class="spot-tag" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.18);color:#93C5FD;">
+            🧮 Tax Calculations
+          </div>
+          <h2>Accurate PAYE in<br><span class="grad">seconds, not hours</span></h2>
+          <p>TaxWise applies the current FIRS tax bands, personal relief allowances, pension (PFA), NHF, NHIS deductions, and CRA automatically. No spreadsheet formulas to maintain.</p>
+          <ul class="check-list">
+            <li><span class="chk">✓</span> 2024–2025 FIRS tax bands built-in</li>
+            <li><span class="chk">✓</span> Consolidated Relief Allowance (CRA) auto-applied</li>
+            <li><span class="chk">✓</span> Pension, NHF & NHIS deductions</li>
+            <li><span class="chk">✓</span> Printable tax computation schedule</li>
+            <li><span class="chk">✓</span> Annual CIT & minimum tax calculation</li>
+          </ul>
+        </div>
+        <div class="spot-visual">
+          <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">PAYE Computation — Chukwuemeka A.</div>
+          <div class="calc-row"><span class="calc-lbl">Gross Annual Income</span><span class="calc-val">₦3,600,000</span></div>
+          <div class="calc-row"><span class="calc-lbl">CRA (20% + ₦200K)</span><span class="calc-val g">− ₦920,000</span></div>
+          <div class="calc-row"><span class="calc-lbl">Pension (8%)</span><span class="calc-val g">− ₦288,000</span></div>
+          <div class="calc-row"><span class="calc-lbl">NHF (2.5%)</span><span class="calc-val g">− ₦90,000</span></div>
+          <div class="calc-row"><span class="calc-lbl">Taxable Income</span><span class="calc-val">₦2,302,000</span></div>
+          <div class="calc-row tot"><span class="calc-lbl">Annual PAYE Tax</span><span class="calc-val b">₦324,650</span></div>
+          <div class="calc-row tot" style="margin-top:4px;"><span class="calc-lbl">Monthly Deduction</span><span class="calc-val b">₦27,054</span></div>
+        </div>
+      </div>
+
+      <!-- Spotlight 2: Document AI -->
+      <div class="spotlight rev" style="margin-top:80px;">
+        <div class="spot-visual">
+          <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Document AI — Receipt Scan</div>
+          <div class="doc-drop">
+            <div class="ddi">📄</div>
+            <div>Invoice_Zenith_Feb2025.pdf</div>
+            <div style="font-size:10px;margin-top:4px;color:var(--dim);">Processing with AI…</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin:2px 0;">
+            <span class="ai-chip">✦ AI Extracted</span>
+            <span style="font-size:11px;color:var(--green);">4 fields detected</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div class="ext-row"><span class="ext-k">Vendor</span><span class="ext-v">Zenith Bank Plc</span></div>
+            <div class="ext-row"><span class="ext-k">Amount</span><span class="ext-v">₦185,000.00</span></div>
+            <div class="ext-row"><span class="ext-k">Date</span><span class="ext-v">14 Feb 2025</span></div>
+            <div class="ext-row"><span class="ext-k">Category</span><span class="ext-v">Bank Charges</span></div>
+          </div>
+          <div style="padding:10px 14px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.12);border-radius:8px;font-size:12px;color:#34D399;">
+            ✓ Entry created automatically in Expenses
+          </div>
+        </div>
+        <div class="spot-content">
+          <div class="spot-tag" style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.18);color:#C4B5FD;">
+            🤖 Document AI
+          </div>
+          <h2>Upload a receipt.<br><span class="grad">We handle the rest.</span></h2>
+          <p>Stop manually typing invoice details. TaxWise's AI reads your PDFs and images, pulls out the key fields, and creates journal entries — ready for your tax return.</p>
+          <ul class="check-list">
+            <li><span class="chk">✓</span> Supports PDF, JPG, PNG &amp; HEIC formats</li>
+            <li><span class="chk">✓</span> Extracts vendor, amount, date, category</li>
+            <li><span class="chk">✓</span> Auto-creates income or expense entries</li>
+            <li><span class="chk">✓</span> Flags missing or ambiguous data for review</li>
+            <li><span class="chk">✓</span> Stores originals in secure cloud document vault</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── How it Works ── -->
+  <section class="section" id="how" style="padding-top:0;">
+    <div class="container">
+      <div class="section-head">
+        <div class="section-label">How it works</div>
+        <h2 class="section-title">Up and running in minutes</h2>
+        <p class="section-sub">No technical knowledge needed. Download, connect your data, and let TaxWise do the heavy lifting.</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h3>Download &amp; Install</h3>
+          <p>Grab the Windows installer below. One-click setup — no configuration files or developer tools needed.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <h3>Set Up Your Business</h3>
+          <p>Enter your company details, add employees or income streams, and connect your bank account via Mono.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h3>Stay FIRS-Compliant</h3>
+          <p>TaxWise calculates, reminds, and generates all your returns. Export to FIRS format with one click.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Pricing ── -->
+  <section class="section" id="pricing">
+    <div class="container">
+      <div class="section-head">
+        <div class="section-label">Pricing</div>
+        <h2 class="section-title">Simple, honest pricing</h2>
+        <p class="section-sub">Start free. Upgrade when your business grows. No hidden fees, no per-user pricing surprises.</p>
+      </div>
+      <div class="pricing-grid">
+        <!-- SME -->
+        <div class="price-card">
+          <div class="plan-name">SME</div>
+          <div class="plan-price">
+            <span class="cur">₦</span><span class="amt">24,999</span><span class="per">/month</span>
+          </div>
+          <p class="plan-desc">Perfect for small and growing Nigerian businesses that need core tax compliance tools.</p>
+          <ul class="plan-feats">
+            <li><span class="pf-icon">✓</span> Up to 3 team members</li>
+            <li><span class="pf-icon">✓</span> PAYE, VAT &amp; WHT calculations</li>
+            <li><span class="pf-icon">✓</span> Income &amp; expense tracking</li>
+            <li><span class="pf-icon">✓</span> Document AI scanner (50 docs/mo)</li>
+            <li><span class="pf-icon">✓</span> Tax deadline reminders</li>
+            <li><span class="pf-icon">✓</span> 5 GB document storage</li>
+            <li><span class="pf-icon">✓</span> Email support</li>
+          </ul>
+          <a href="#download" class="plan-btn ghost">Get started free</a>
+        </div>
+        <!-- Enterprise -->
+        <div class="price-card pop">
+          <div class="pop-tag">Most Popular</div>
+          <div class="plan-name">Enterprise</div>
+          <div class="plan-price">
+            <span class="cur">₦</span><span class="amt">49,999</span><span class="per">/month</span>
+          </div>
+          <p class="plan-desc">For established businesses and accounting firms that need full compliance coverage and team collaboration.</p>
+          <ul class="plan-feats">
+            <li><span class="pf-icon">✓</span> Unlimited team members</li>
+            <li><span class="pf-icon">✓</span> All tax types incl. CIT &amp; CGT</li>
+            <li><span class="pf-icon">✓</span> POS system &amp; inventory management</li>
+            <li><span class="pf-icon">✓</span> Document AI — unlimited scans</li>
+            <li><span class="pf-icon">✓</span> Bank reconciliation via Mono</li>
+            <li><span class="pf-icon">✓</span> 50 GB document storage</li>
+            <li><span class="pf-icon">✓</span> AI Tax Assistant (chat)</li>
+            <li><span class="pf-icon">✓</span> Priority phone &amp; WhatsApp support</li>
+          </ul>
+          <a href="#download" class="plan-btn solid">Download &amp; Subscribe</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Download CTA ── -->
+  <section id="download">
+    <div class="container">
+      <div class="dl-super">✦ Windows 10 &amp; 11 — 64-bit</div>
+      <h2>Download TaxWise<br><span class="grad">Free Today</span></h2>
+      <p>Join Nigerian businesses automating their tax compliance.<br>No credit card required to get started.</p>
+      <a href="#" id="main-dl-btn" class="dl-btn-main">
+        <span class="dl-btn-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </span>
+        Download TaxWise for Windows
+      </a>
+      <div class="dl-meta">
+        <div class="dl-meta-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Free download &amp; setup
+        </div>
+        <div class="dl-meta-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Windows 10 / 11 (64-bit)
+        </div>
+        <div class="dl-meta-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Works offline
+        </div>
+        <div class="dl-meta-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Auto-updates included
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <div class="container">
+      <div class="foot-inner">
+        <div class="foot-brand">
+          <div class="foot-logo">₦</div>
+          <div>
+            <div class="foot-name">TaxWise</div>
+            <div class="foot-copy">© 2025 TaxWise · Nigerian Tax Management &amp; Compliance System</div>
+          </div>
+        </div>
+        <div class="foot-links">
+          <a href="#features">Features</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#download">Download</a>
+          <a href="mailto:support@taxwise.ng">Support</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</div><!-- /landing -->
+
+<!-- ═══════════════════════════════════════════════════
+     SCRIPTS
+════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+  /* ─────────────────────────────────────────────
+     CONFIG
+  ─────────────────────────────────────────────── */
+  const SUPABASE_URL  = 'https://xgicdlwxjkqtarfytbgz.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnaWNkbHd4amtxdGFyZnl0Ymd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNzU0NzcsImV4cCI6MjA4NTk1MTQ3N30.tDNwtvRXLA5-BSJgQnsiOFAw2XFK7vBXaOLL5qh3GlU';
+
+  // EXE is hosted in Supabase Storage → bucket: "downloads" → file: "TaxWise-Setup.exe"
+  // Upload steps: Supabase Dashboard → Storage → New bucket "downloads" (Public) → Upload EXE renamed to "TaxWise-Setup.exe"
+  const DOWNLOAD_URL = 'https://xgicdlwxjkqtarfytbgz.supabase.co/storage/v1/object/public/downloads/TaxWise-Setup.exe';
+
+  /* ─────────────────────────────────────────────
+     SUPABASE INIT
+  ─────────────────────────────────────────────── */
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: { detectSessionInUrl: false }
+  });
+
+  /* ─────────────────────────────────────────────
+     WIRE DOWNLOAD BUTTONS
+  ─────────────────────────────────────────────── */
+  document.querySelectorAll('#main-dl-btn, #hero-dl-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      window.location.href = DOWNLOAD_URL;
+    });
+  });
+
+  /* ─────────────────────────────────────────────
+     NAVBAR SCROLL EFFECT
+  ─────────────────────────────────────────────── */
+  const navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    navbar.classList.toggle('scrolled', window.scrollY > 40);
+  }, { passive: true });
+
+  /* ─────────────────────────────────────────────
+     SCROLL ANIMATIONS
+  ─────────────────────────────────────────────── */
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        const delay = entry.target.dataset.delay || 0;
+        setTimeout(() => entry.target.classList.add('vis'), delay);
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.feat-card, .step, .price-card').forEach((el, i) => {
+    el.dataset.delay = (i % 3) * 90;
+    observer.observe(el);
+  });
+
+  /* ─────────────────────────────────────────────
+     AUTH FLOW
+  ─────────────────────────────────────────────── */
+  const authApp  = document.getElementById('auth-app');
+  const landing  = document.getElementById('landing');
+
+  function parseHash() {
+    const hash  = window.location.hash.replace(/^#\/?/, '');
+    const q     = window.location.search;
+    const fH    = new URLSearchParams(hash);
+    const fQ    = new URLSearchParams(q);
+    const get   = k => fH.get(k) || fQ.get(k);
+    return {
+      accessToken  : get('access_token'),
+      refreshToken : get('refresh_token'),
+      type         : get('type'),
+      error        : get('error'),
+      errorDesc    : get('error_description'),
+    };
+  }
+
+  function showAuth(html) {
+    authApp.innerHTML = html;
+    authApp.style.display = 'flex';
+    landing.style.display = 'none';
+  }
+
+  function authLogo() {
+    return `
+      <a href="/" class="a-logo">
+        <div class="a-logo-icon">₦</div>
+        <div>
+          <div class="a-logo-name">TaxWise</div>
+          <div class="a-logo-sub">Nigerian Tax Management</div>
+        </div>
+      </a>`;
+  }
+
+  function showAuthLoading(msg = 'Verifying your link…') {
+    showAuth(`
+      <div class="a-loading">
+        <div class="a-spinner"></div>
+        <span>${msg}</span>
+      </div>`);
+  }
+
+  function showAuthError(msg) {
+    showAuth(`
+      ${authLogo()}
+      <div class="a-card">
+        <div class="a-card-icon" style="background:rgba(239,68,68,0.1);">🔗</div>
+        <h2>Link Expired or Invalid</h2>
+        <p class="a-card-sub">This link may have already been used or has expired. Please request a new one.</p>
+        <div class="a-alert err">${msg}</div>
+        <button class="a-btn-ghost" onclick="showLanding()">← Back to Home</button>
+      </div>`);
+  }
+
+  function showLanding() {
+    authApp.style.display = 'none';
+    landing.style.display = 'block';
+    history.replaceState(null, '', window.location.pathname);
+  }
+
+  /* ── Password strength ── */
+  function strength(pw) {
+    let s = 0;
+    if (pw.length >= 8)           s++;
+    if (pw.length >= 12)          s++;
+    if (/[A-Z]/.test(pw))         s++;
+    if (/[0-9]/.test(pw))         s++;
+    if (/[^A-Za-z0-9]/.test(pw))  s++;
+    const lbls  = ['','Weak','Fair','Good','Strong','Very strong'];
+    const clrs  = ['','#EF4444','#F59E0B','#EAB308','#10B981','#10B981'];
+    return { score: s, label: lbls[s] || '', color: clrs[s] || '' };
+  }
+
+  function updateStrength(id) {
+    const pw  = document.getElementById(id)?.value || '';
+    const { score, label, color } = strength(pw);
+    document.querySelectorAll('.str-seg').forEach((seg, i) => {
+      seg.style.background = i < score ? color : 'var(--border)';
+    });
+    const txt = document.querySelector('.str-txt');
+    if (txt) txt.textContent = pw.length ? label : '';
+  }
+
+  function togglePw(id, btn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const show = el.type === 'password';
+    el.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁';
+  }
+
+  /* ── Password form ── */
+  function showPasswordForm(title, sub, iconEmoji, iconBg, isInvite) {
+    showAuth(`
+      ${authLogo()}
+      <div class="a-card">
+        <div class="a-card-icon" style="background:${iconBg};">${iconEmoji}</div>
+        <h2>${title}</h2>
+        <p class="a-card-sub">${sub}</p>
+        <div id="formAlert"></div>
+
+        <div class="a-group">
+          <label for="pw">New Password</label>
+          <div class="pw-wrap">
+            <input class="a-input" type="password" id="pw" placeholder="At least 8 characters"
+                   oninput="updateStrength('pw')" />
+            <button class="pw-eye" type="button" onclick="togglePw('pw',this)">👁</button>
+          </div>
+          <div class="str-bar">
+            <div class="str-seg"></div><div class="str-seg"></div>
+            <div class="str-seg"></div><div class="str-seg"></div>
+            <div class="str-seg"></div>
+          </div>
+          <div class="str-txt"></div>
+        </div>
+
+        <div class="a-group">
+          <label for="pw2">Confirm Password</label>
+          <div class="pw-wrap">
+            <input class="a-input" type="password" id="pw2" placeholder="Re-enter password"
+                   onkeydown="if(event.key==='Enter')submitPw(${isInvite})" />
+            <button class="pw-eye" type="button" onclick="togglePw('pw2',this)">👁</button>
+          </div>
+        </div>
+
+        <button class="a-btn" id="submitBtn" onclick="submitPw(${isInvite})">
+          ${isInvite ? '✓&nbsp; Activate My Account' : '🔒&nbsp; Set New Password'}
+        </button>
+      </div>`);
+
+    setTimeout(() => document.getElementById('pw')?.focus(), 80);
+  }
+
+  async function submitPw(isInvite) {
+    const pw    = document.getElementById('pw')?.value  || '';
+    const pw2   = document.getElementById('pw2')?.value || '';
+    const alrt  = document.getElementById('formAlert');
+    const btn   = document.getElementById('submitBtn');
+    alrt.innerHTML = '';
+
+    if (pw.length < 8) {
+      alrt.innerHTML = '<div class="a-alert err">Password must be at least 8 characters.</div>'; return;
+    }
+    if (pw !== pw2) {
+      alrt.innerHTML = '<div class="a-alert err">Passwords do not match.</div>'; return;
+    }
+    if (strength(pw).score < 2) {
+      alrt.innerHTML = '<div class="a-alert err">Password is too weak — add numbers or symbols.</div>'; return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      const { error } = await sb.auth.updateUser({ password: pw });
+      if (error) throw error;
+      showSuccess(isInvite);
+    } catch (err) {
+      alrt.innerHTML    = `<div class="a-alert err">${err.message}</div>`;
+      btn.disabled      = false;
+      btn.innerHTML     = isInvite ? '✓&nbsp; Activate My Account' : '🔒&nbsp; Set New Password';
+    }
+  }
+
+  function showSuccess(isInvite) {
+    const title = isInvite ? 'Account Activated!' : 'Password Updated!';
+    const msg   = isInvite
+      ? 'Your TaxWise account is ready. Open the desktop app on your Windows PC to sign in with your new password.'
+      : 'Your password has been changed. Open TaxWise and sign in with your new credentials.';
+
+    showAuth(`
+      ${authLogo()}
+      <div class="a-card" style="text-align:center;">
+        <div class="a-success-icon">🎉</div>
+        <h2>${title}</h2>
+        <p class="a-card-sub" style="margin-bottom:22px;">${msg}</p>
+        <div class="a-alert ok" style="text-align:left;margin-bottom:22px;">
+          ✓ ${isInvite ? 'Password set — your account is now active.' : 'Password updated successfully.'}
+        </div>
+        <button class="a-btn green" onclick="tryOpenApp()">
+          🚀&nbsp; Open TaxWise App
+        </button>
+        <hr class="a-divider" />
+        <p class="a-hint">
+          App not opening? Launch TaxWise from your Windows desktop shortcut.<br>
+          Don't have it yet?&nbsp;<a href="${DOWNLOAD_URL}">Download TaxWise</a>.
+        </p>
+      </div>`);
+  }
+
+  function tryOpenApp() {
+    window.location.href = 'taxwise://';
+    setTimeout(() => {
+      // If the app didn't open, show a nudge
+      const btn = document.querySelector('#auth-app .a-btn.green');
+      if (btn) btn.textContent = '🔗 Open Taxwise (retry)';
+    }, 2500);
+  }
+
+  /* ── Main init ── */
+  async function init() {
+    const { accessToken, refreshToken, type, error, errorDesc } = parseHash();
+
+    if (error) {
+      showAuthError(errorDesc || error);
+      return;
+    }
+
+    if (!accessToken) {
+      // No tokens — show normal landing page
+      landing.style.display = 'block';
+      return;
+    }
+
+    // Tokens present — handle auth flow
+    showAuthLoading();
+
+    const { error: sessionErr } = await sb.auth.setSession({
+      access_token:  accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (sessionErr) {
+      showAuthError('This link has expired or has already been used. Please request a new one from TaxWise.');
+      return;
+    }
+
+    // Clean tokens from URL
+    history.replaceState(null, '', window.location.pathname);
+
+    if (type === 'invite') {
+      showPasswordForm(
+        'Welcome to TaxWise',
+        "You've been invited to join a team on TaxWise. Set a password to activate your account.",
+        '👋', 'rgba(59,130,246,0.1)', true
+      );
+    } else if (type === 'recovery') {
+      showPasswordForm(
+        'Reset Your Password',
+        'Enter a new password for your TaxWise account.',
+        '🔑', 'rgba(245,158,11,0.1)', false
+      );
+    } else {
+      showSuccess(false);
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
