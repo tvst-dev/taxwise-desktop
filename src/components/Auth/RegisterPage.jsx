@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Eye, EyeOff, Calculator, AlertCircle, Loader, Check,
-  Building2, Users, Zap, CreditCard, Lock, Calendar, Shield, Star
+  Building2, Users, Zap, Lock, Shield, Star
 } from 'lucide-react';
 import { signUp, createOrganization, createUserProfile } from '../../services/supabase';
 import { useAuthStore } from '../../store';
@@ -87,11 +87,7 @@ const RegisterPage = () => {
   const [selectedPlan, setSelectedPlan] = useState('sme');
 
   // Payment
-  const [card, setCard] = useState({ number: '', expiry: '', cvv: '' });
-  const [cardErrors, setCardErrors] = useState({});
-  const [paymentStep, setPaymentStep] = useState('card'); // card | otp | processing | success
-  const [otpValue, setOtpValue] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentStep, setPaymentStep] = useState('card'); // card | processing | success
 
   // Created data (saved between steps)
   const [createdUser, setCreatedUser] = useState(null);
@@ -120,30 +116,6 @@ const RegisterPage = () => {
       setError('Please enter your business name'); return false;
     }
     return true;
-  };
-
-  const validateCard = () => {
-    const errors = {};
-    const cardNum = card.number.replace(/\s/g, '');
-    if (!cardNum || cardNum.length < 16) errors.number = 'Valid card number required';
-    if (!card.expiry || card.expiry.length < 5) errors.expiry = 'Valid expiry required';
-    if (!card.cvv || card.cvv.length < 3) errors.cvv = 'Valid CVV required';
-    setCardErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const formatCardNumber = (value) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    const matches = v.match(/\d{4,16}/g);
-    const match = (matches && matches[0]) || '';
-    const parts = [];
-    for (let i = 0, len = match.length; i < len; i += 4) parts.push(match.substring(i, i + 4));
-    return parts.length ? parts.join(' ') : value;
-  };
-
-  const formatExpiry = (value) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    return v.length >= 2 ? v.substring(0, 2) + '/' + v.substring(2, 4) : v;
   };
 
   const handleNext = () => {
@@ -186,7 +158,6 @@ const RegisterPage = () => {
   };
 
   const handleStartTrial = async () => {
-    if (!validateCard()) return;
     setError('');
     setIsLoading(true);
     setPaymentStep('processing');
@@ -201,83 +172,41 @@ const RegisterPage = () => {
         org = result.org;
       }
 
-      const [expiryMonth, expiryYear] = card.expiry.split('/');
-
-      // Charge ₦100 for card verification (is_trial: true)
-      const response = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
+      // Step 1: Initialize transaction — works with ALL card types worldwide
+      const initRes = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': config.SUPABASE_ANON_KEY
-        },
+        headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
         body: JSON.stringify({
-          action: 'charge_card',
+          action: 'initialize',
           email,
           is_trial: true,
           plan: selectedPlan,
-          card: {
-            number: card.number.replace(/\s/g, ''),
-            cvv: card.cvv,
-            expiry_month: expiryMonth,
-            expiry_year: '20' + expiryYear
-          },
-          metadata: { organization_id: org.id, user_id: user.id }
+          organization_id: org.id
         })
       });
 
-      const data = await response.json();
+      const initData = await initRes.json();
+      if (!initData.success) throw new Error(initData.error || 'Payment setup failed');
 
-      if (data.success) {
-        setPaymentReference(data.reference);
+      // Step 2: Open Paystack checkout in Electron popup — user enters card there
+      setPaymentStep('card');
+      const result = await window.electronAPI.payment.openPopup(initData.authorization_url);
 
-        if (data.status === 'success') {
-          await verifyAndComplete(data.reference, org.id);
-        } else if (data.status === 'send_otp' || data.status === 'send_pin') {
-          setPaymentStep('otp');
-          toast.success(data.display_text || 'Enter the OTP sent to your phone');
-        } else if (data.status === '3ds_required') {
-          window.open(data.url, '_blank', 'width=500,height=600');
-          toast.success('Complete authentication in the popup');
-          pollForCompletion(data.reference, org.id);
-        } else {
-          throw new Error(data.message || 'Card verification failed');
-        }
-      } else {
-        throw new Error(data.error || 'Card verification failed');
-      }
+      if (!result.success) throw new Error(result.error || 'Payment cancelled');
+
+      setPaymentStep('processing');
+
+      // Step 3: Verify payment and activate trial
+      await verifyAndComplete(result.reference, org.id);
+
     } catch (err) {
       console.error('Trial start error:', err);
       setPaymentStep('card');
       if (err.message?.includes('already registered')) {
         setError('This email is already registered. Please sign in instead.');
       } else {
-        setError(err.message || 'Card verification failed. Please try again.');
+        setError(err.message || 'Payment failed. Please try again.');
       }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleOtpSubmit = async () => {
-    if (!otpValue || otpValue.length < 4) {
-      toast.error('Please enter valid OTP'); return;
-    }
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
-        body: JSON.stringify({ action: 'submit_otp', reference: paymentReference, otp: otpValue })
-      });
-      const data = await response.json();
-      if (data.success && data.status === 'success') {
-        await verifyAndComplete(paymentReference, createdOrg.id);
-      } else {
-        throw new Error(data.message || 'OTP verification failed');
-      }
-    } catch (err) {
-      toast.error(err.message);
-      setPaymentStep('otp');
     } finally {
       setIsLoading(false);
     }
@@ -303,30 +232,6 @@ const RegisterPage = () => {
     } else {
       throw new Error(data.error || 'Verification failed');
     }
-  };
-
-  const pollForCompletion = (reference, orgId) => {
-    let attempts = 0;
-    const poll = async () => {
-      attempts++;
-      if (attempts > 60) { toast.error('Authentication timeout'); setPaymentStep('card'); return; }
-      try {
-        const response = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
-          body: JSON.stringify({ action: 'verify', reference, organization_id: orgId, plan: selectedPlan, is_trial: true })
-        });
-        const data = await response.json();
-        if (data.success) {
-          setPaymentStep('success');
-          toast.success('Trial started!');
-          setTimeout(() => navigate('/login'), 2500);
-        } else {
-          setTimeout(poll, 5000);
-        }
-      } catch { setTimeout(poll, 5000); }
-    };
-    setTimeout(poll, 5000);
   };
 
   const stepLabels = ['Account', 'Business', 'Plan', 'Card'];
@@ -508,27 +413,6 @@ const RegisterPage = () => {
                 </div>
               )}
 
-              {/* OTP */}
-              {paymentStep === 'otp' && (
-                <div style={styles.otpContainer}>
-                  <Lock size={40} color="#2563EB" />
-                  <h3 style={styles.otpTitle}>Enter OTP</h3>
-                  <p style={styles.otpText}>Enter the code sent to your registered phone</p>
-                  <input
-                    type="text"
-                    value={otpValue}
-                    onChange={e => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="------"
-                    style={styles.otpInput}
-                    maxLength={6}
-                    autoFocus
-                  />
-                  <button onClick={handleOtpSubmit} style={styles.primaryBtn} disabled={isLoading}>
-                    {isLoading ? <Loader size={20} className="spin" /> : 'Verify OTP'}
-                  </button>
-                </div>
-              )}
-
               {/* Processing */}
               {paymentStep === 'processing' && (
                 <div style={styles.processingContainer}>
@@ -543,7 +427,7 @@ const RegisterPage = () => {
                 <>
                   <div style={styles.secureNotice}>
                     <Lock size={14} />
-                    <span>Secure card capture — encrypted end-to-end</span>
+                    <span>Secure payment powered by Paystack — accepts all major cards worldwide</span>
                   </div>
 
                   {/* Trial summary */}
@@ -571,55 +455,9 @@ const RegisterPage = () => {
                     </div>
                   </div>
 
-                  {/* Card Number */}
-                  <div style={styles.field}>
-                    <label style={styles.label}>Card Number</label>
-                    <div style={styles.inputWrapper}>
-                      <CreditCard size={18} style={styles.inputIcon} />
-                      <input
-                        type="text"
-                        value={card.number}
-                        onChange={e => setCard({ ...card, number: formatCardNumber(e.target.value) })}
-                        placeholder="1234 5678 9012 3456"
-                        style={{ ...styles.cardInput, ...(cardErrors.number && styles.inputError) }}
-                        maxLength={19}
-                      />
-                    </div>
-                    {cardErrors.number && <span style={styles.errorText}>{cardErrors.number}</span>}
-                  </div>
-
-                  <div style={styles.row}>
-                    <div style={styles.field}>
-                      <label style={styles.label}>Expiry Date</label>
-                      <div style={styles.inputWrapper}>
-                        <Calendar size={18} style={styles.inputIcon} />
-                        <input
-                          type="text"
-                          value={card.expiry}
-                          onChange={e => setCard({ ...card, expiry: formatExpiry(e.target.value) })}
-                          placeholder="MM/YY"
-                          style={{ ...styles.cardInput, ...(cardErrors.expiry && styles.inputError) }}
-                          maxLength={5}
-                        />
-                      </div>
-                      {cardErrors.expiry && <span style={styles.errorText}>{cardErrors.expiry}</span>}
-                    </div>
-                    <div style={styles.field}>
-                      <label style={styles.label}>CVV</label>
-                      <div style={styles.inputWrapper}>
-                        <Lock size={18} style={styles.inputIcon} />
-                        <input
-                          type="password"
-                          value={card.cvv}
-                          onChange={e => setCard({ ...card, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                          placeholder="123"
-                          style={{ ...styles.cardInput, ...(cardErrors.cvv && styles.inputError) }}
-                          maxLength={4}
-                        />
-                      </div>
-                      {cardErrors.cvv && <span style={styles.errorText}>{cardErrors.cvv}</span>}
-                    </div>
-                  </div>
+                  <p style={{ color: '#8B949E', fontSize: 13, margin: '0 0 16px', lineHeight: 1.5 }}>
+                    Click below to enter your card details securely via Paystack's checkout. A ₦100 verification charge will be applied and immediately refunded.
+                  </p>
 
                   <div style={styles.btnRow}>
                     <button type="button" onClick={handleBack} style={styles.secondaryBtn}>Back</button>

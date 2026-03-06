@@ -232,6 +232,63 @@ app.whenReady().then(async () => {
   });
 });
 
+// IPC: open Paystack payment popup — works with all card types worldwide
+// Intercepts Paystack's redirect to our local callback URL to capture the reference
+const PAYMENT_CALLBACK_HOST = 'localhost:52731';
+
+ipcMain.handle('payment:openPopup', async (event, { authorizationUrl }) => {
+  return new Promise((resolve) => {
+    const payWin = new BrowserWindow({
+      width: 500,
+      height: 680,
+      modal: true,
+      parent: mainWindow,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+      title: 'TaxWise — Secure Payment',
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      autoHideMenuBar: true,
+    });
+
+    payWin.loadURL(authorizationUrl);
+
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      if (!payWin.isDestroyed()) payWin.destroy();
+      resolve(result);
+    };
+
+    // Paystack redirects to callback_url after payment — intercept before it tries to load
+    payWin.webContents.on('will-redirect', (e, url) => {
+      if (url.includes(PAYMENT_CALLBACK_HOST)) {
+        e.preventDefault();
+        try {
+          const u = new URL(url);
+          const reference = u.searchParams.get('reference') || u.searchParams.get('trxref');
+          settle({ success: true, reference });
+        } catch { settle({ success: false, error: 'Invalid payment callback' }); }
+      }
+    });
+
+    // Fallback: catches navigation that didn't trigger will-redirect
+    payWin.webContents.on('did-navigate', (_, url) => {
+      if (url.includes(PAYMENT_CALLBACK_HOST)) {
+        try {
+          const u = new URL(url);
+          const reference = u.searchParams.get('reference') || u.searchParams.get('trxref');
+          if (reference) settle({ success: true, reference });
+        } catch {}
+      }
+    });
+
+    // User closed the window manually
+    payWin.on('closed', () => settle({ success: false, error: 'Payment cancelled' }));
+  });
+});
+
 // IPC: manual update check from renderer
 ipcMain.handle('updates:check', async () => {
   if (!app.isPackaged) return { available: false, message: 'Dev mode — updates disabled' };

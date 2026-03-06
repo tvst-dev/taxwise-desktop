@@ -79,6 +79,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  // Payment popup — opens Paystack checkout in a child BrowserWindow
+  payment: {
+    openPopup: (authorizationUrl) => ipcRenderer.invoke('payment:openPopup', { authorizationUrl }),
+  },
+
   // Auto-update controls
   updates: {
     // Listen for events from main process

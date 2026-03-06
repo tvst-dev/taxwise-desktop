@@ -321,7 +321,11 @@ const Entries = () => {
                       )}
                     </div>
                   </td>
-                  <td style={styles.td}>{entry.category || '-'}</td>
+                  <td style={styles.td}>
+                    {entry.category
+                      ? entry.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                      : '-'}
+                  </td>
                   <td style={styles.td}>
                     <span style={{ ...styles.typeBadge, ...getTypeStyle(entry.entry_type) }}>
                       {entry.entry_type === 'income' && <ArrowUpRight size={12} />}

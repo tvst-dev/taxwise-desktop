@@ -35,8 +35,8 @@ const PLANS: Record<string, { name: string; amount: number; interval: string; pl
   }
 };
 
-// Trial card verification — ₦0 (card tokenization only, no charge)
-const CARD_VERIFICATION_AMOUNT = 0;
+// Trial card verification — ₦100 charged then immediately refunded (Paystack minimum; net = ₦0)
+const CARD_VERIFICATION_AMOUNT = 10000; // ₦100 in kobo
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -73,6 +73,8 @@ serve(async (req) => {
     }
 
     switch (action) {
+      case "initialize":
+        return await handleInitialize(payload, paystackSecretKey);
       case "charge_card":
         return await handleChargeCard(payload, paystackSecretKey, user, supabase);
       case "submit_otp":
@@ -104,6 +106,56 @@ function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" }
+  });
+}
+
+// Initialize a Paystack transaction — returns authorization_url for BrowserWindow popup
+// Works with ALL card types (international + Nigerian), no direct-charge approval needed
+async function handleInitialize(payload: Record<string, unknown>, secretKey: string) {
+  const { email, plan, is_trial, organization_id } = payload as {
+    email: string;
+    plan?: string;
+    is_trial?: boolean;
+    organization_id?: string;
+  };
+
+  if (!email) return jsonResponse({ error: "Email required" }, 400);
+
+  const amount = is_trial
+    ? CARD_VERIFICATION_AMOUNT
+    : (PLANS[plan || "sme"]?.amount || PLANS.sme.amount);
+
+  const reference = `txw_${is_trial ? "trial" : "sub"}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+  const response = await fetch(`${PAYSTACK_API_URL}/transaction/initialize`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${secretKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      amount,
+      reference,
+      // Electron intercepts this redirect before it hits a real server
+      callback_url: "http://localhost:52731/taxwise-pay-complete",
+      label: is_trial ? "TaxWise 14-Day Trial — Card Verification (₦100 refunded)" : `TaxWise ${plan || "SME"} Plan`,
+      metadata: { plan: plan || "sme", is_trial: is_trial || false, organization_id },
+    }),
+  });
+
+  const data = await response.json();
+  console.log("Paystack /transaction/initialize response:", JSON.stringify(data));
+
+  if (!data.status) {
+    return jsonResponse({ error: data.message || "Failed to initialize payment" }, 400);
+  }
+
+  return jsonResponse({
+    success: true,
+    authorization_url: data.data.authorization_url,
+    reference: data.data.reference,
+    access_code: data.data.access_code,
   });
 }
 
@@ -160,8 +212,15 @@ async function handleChargeCard(payload: Record<string, unknown>, secretKey: str
 
   const chargeData = await chargeResponse.json();
 
+  // Log full Paystack response for debugging
+  console.log("Paystack /charge response:", JSON.stringify(chargeData));
+
   if (!chargeData.status) {
-    return jsonResponse({ error: chargeData.message }, 400);
+    // Return full detail so the frontend can show a useful message
+    return jsonResponse({
+      error: chargeData.message,
+      detail: chargeData
+    }, 400);
   }
 
   const status = chargeData.data.status;
@@ -191,11 +250,19 @@ async function handleChargeCard(payload: Record<string, unknown>, secretKey: str
       reference: chargeData.data.reference,
       url: chargeData.data.url
     });
+  } else if (status === "charge_attempted") {
+    // Paystack queued the charge — client should immediately call verify
+    return jsonResponse({
+      success: true,
+      status: "charge_attempted",
+      reference: chargeData.data.reference,
+      display_text: "Verifying card, please wait…"
+    });
   } else {
     return jsonResponse({
       success: false,
       status,
-      message: chargeData.data.message || "Payment failed"
+      message: chargeData.data?.message || chargeData.message || "Payment failed"
     }, 400);
   }
 }
@@ -294,6 +361,22 @@ async function handleVerify(payload: Record<string, unknown>, secretKey: string,
         current_period_start: now.toISOString(),
         current_period_end: trialEndsAt.toISOString()
       }, { onConflict: "organization_id" });
+
+      // Immediately refund the ₦100 verification charge — net cost to customer = ₦0
+      // The authorization_code remains valid for future charges even after refund
+      try {
+        await fetch(`${PAYSTACK_API_URL}/refund`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${secretKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ transaction: reference }),
+        });
+      } catch (refundErr) {
+        // Non-fatal: log but don't fail the signup
+        console.error("Auto-refund failed:", (refundErr as Error).message);
+      }
 
     } else {
       // Direct subscription (upgrade/reactivate)
