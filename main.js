@@ -191,17 +191,12 @@ function saveDatabase() {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  // Strip Cross-Origin-Resource-Policy headers from Paystack so inline.js assets
-  // load correctly inside Electron (which has no same-origin context)
+  // Redirect Paystack's button CSS (which returns an HTML 404 page) to an empty
+  // stylesheet so inline.js initialises without MIME-type errors in Electron
   const { session } = require('electron');
-  session.defaultSession.webRequest.onHeadersReceived(
-    { urls: ['https://*.paystack.com/*', 'https://paystack.com/*'] },
-    (details, callback) => {
-      const headers = { ...details.responseHeaders };
-      delete headers['cross-origin-resource-policy'];
-      delete headers['Cross-Origin-Resource-Policy'];
-      callback({ responseHeaders: headers });
-    }
+  session.defaultSession.webRequest.onBeforeRequest(
+    { urls: ['https://paystack.com/public/css/button.min.css'] },
+    (details, callback) => callback({ redirectURL: 'data:text/css,' })
   );
 
   await initializeDatabase();

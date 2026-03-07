@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, Calculator, AlertCircle, Loader, Check,
   Building2, Users, Zap, Lock, Shield, Star
 } from 'lucide-react';
-import { signUp, createOrganization, createUserProfile, getUserProfile, getOrganization } from '../../services/supabase';
+import { signUp, signIn, createOrganization, createUserProfile, getUserProfile, getOrganization } from '../../services/supabase';
 import { useAuthStore } from '../../store';
 import config from '../../config';
 import toast from 'react-hot-toast';
@@ -132,7 +132,19 @@ const RegisterPage = () => {
   };
 
   const createAccountAndOrg = async () => {
-    const { user } = await signUp(email, password, { first_name: firstName, last_name: lastName });
+    let user;
+    try {
+      const result = await signUp(email, password, { first_name: firstName, last_name: lastName });
+      user = result.user;
+    } catch (err) {
+      // Rate-limited or user already exists — sign in with the same credentials
+      if (err.status === 429 || err.message?.toLowerCase().includes('rate limit') || err.message?.toLowerCase().includes('already registered')) {
+        const result = await signIn(email, password);
+        user = result.user;
+      } else {
+        throw err;
+      }
+    }
     if (!user) throw new Error('Registration failed');
     setCreatedUser(user);
 
