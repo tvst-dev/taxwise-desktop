@@ -191,12 +191,16 @@ function saveDatabase() {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  // Redirect Paystack's button CSS (which returns an HTML 404 page) to an empty
-  // stylesheet so inline.js initialises without MIME-type errors in Electron
+  // Paystack's button.min.css returns text/html — override Content-Type so
+  // Electron's strict MIME checker accepts it without errors
   const { session } = require('electron');
-  session.defaultSession.webRequest.onBeforeRequest(
+  session.defaultSession.webRequest.onHeadersReceived(
     { urls: ['https://paystack.com/public/css/button.min.css'] },
-    (details, callback) => callback({ redirectURL: 'data:text/css,' })
+    (details, callback) => {
+      const headers = { ...details.responseHeaders };
+      headers['content-type'] = ['text/css'];
+      callback({ responseHeaders: headers });
+    }
   );
 
   await initializeDatabase();

@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, Calculator, AlertCircle, Loader, Check,
   Building2, Users, Zap, Lock, Shield, Star
 } from 'lucide-react';
-import { signUp, signIn, createOrganization, createUserProfile, getUserProfile, getOrganization } from '../../services/supabase';
+import { signUp, createOrganization, createUserProfile } from '../../services/supabase';
 import { useAuthStore } from '../../store';
 import config from '../../config';
 import toast from 'react-hot-toast';
@@ -118,11 +118,40 @@ const RegisterPage = () => {
     return true;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setError('');
-    if (step === 1 && validateStep1()) setStep(2);
-    else if (step === 2 && validateStep2()) setStep(3);
-    else if (step === 3) setStep(4);
+    if (step === 1 && validateStep1()) { setStep(2); return; }
+    if (step === 2 && validateStep2()) { setStep(3); return; }
+    if (step === 3) {
+      // Create account + org once when advancing to the payment step
+      setIsLoading(true);
+      try {
+        const { user } = await signUp(email, password, { first_name: firstName, last_name: lastName });
+        if (!user) throw new Error('Registration failed. Please try again.');
+        setCreatedUser(user);
+
+        const org = await createOrganization({
+          name: businessName, business_type: businessType,
+          tin: tin || null, subscription_tier: selectedPlan, subscription_status: 'pending'
+        });
+        setCreatedOrg(org);
+
+        await createUserProfile({
+          id: user.id, email, first_name: firstName,
+          last_name: lastName, organization_id: org.id, role: 'owner'
+        });
+
+        setStep(4);
+      } catch (err) {
+        if (err.message?.toLowerCase().includes('already registered') || err.message?.toLowerCase().includes('user already registered')) {
+          setError('An account with this email already exists. Please sign in instead.');
+        } else {
+          setError(err.message || 'Failed to create account. Please try again.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   const handleBack = () => {
@@ -131,70 +160,18 @@ const RegisterPage = () => {
     else setStep(step - 1);
   };
 
-  const createAccountAndOrg = async () => {
-    let user;
-    try {
-      const result = await signUp(email, password, { first_name: firstName, last_name: lastName });
-      user = result.user;
-    } catch (err) {
-      // Rate-limited or user already exists — sign in with the same credentials
-      if (err.status === 429 || err.message?.toLowerCase().includes('rate limit') || err.message?.toLowerCase().includes('already registered')) {
-        const result = await signIn(email, password);
-        user = result.user;
-      } else {
-        throw err;
-      }
-    }
-    if (!user) throw new Error('Registration failed');
-    setCreatedUser(user);
-
-    // If this user already has a profile+org from a previous failed attempt, reuse them
-    try {
-      const existingProfile = await getUserProfile(user.id);
-      if (existingProfile?.organization_id) {
-        const existingOrg = await getOrganization(existingProfile.organization_id);
-        setCreatedOrg(existingOrg);
-        return { user, org: existingOrg };
-      }
-    } catch (_) {
-      // No existing profile — create fresh below
-    }
-
-    const org = await createOrganization({
-      name: businessName,
-      business_type: businessType,
-      tin: tin || null,
-      subscription_tier: selectedPlan,
-      subscription_status: 'pending'
-    });
-    setCreatedOrg(org);
-
-    await createUserProfile({
-      id: user.id,
-      email,
-      first_name: firstName,
-      last_name: lastName,
-      organization_id: org.id,
-      role: 'owner'
-    });
-
-    return { user, org };
-  };
-
   const handleStartTrial = async () => {
     setError('');
+    if (!createdUser || !createdOrg) {
+      setError('Account setup incomplete. Please go back and try again.');
+      return;
+    }
     setIsLoading(true);
     setPaymentStep('processing');
 
     try {
-      let user = createdUser;
-      let org = createdOrg;
-
-      if (!user || !org) {
-        const result = await createAccountAndOrg();
-        user = result.user;
-        org = result.org;
-      }
+      const user = createdUser;
+      const org = createdOrg;
 
       // Step 1: Initialize transaction — works with ALL card types worldwide
       const initRes = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
@@ -421,10 +398,9 @@ const RegisterPage = () => {
                 })}
               </div>
               <div style={styles.btnRow}>
-                <button type="button" onClick={handleBack} style={styles.secondaryBtn}>Back</button>
-                <button type="button" onClick={handleNext} style={styles.primaryBtn}>
-                  <Zap size={18} />
-                  Continue
+                <button type="button" onClick={handleBack} style={styles.secondaryBtn} disabled={isLoading}>Back</button>
+                <button type="button" onClick={handleNext} style={{ ...styles.primaryBtn, opacity: isLoading ? 0.7 : 1 }} disabled={isLoading}>
+                  {isLoading ? <><Loader size={18} className="spin" /><span>Creating account…</span></> : <><Zap size={18} /><span>Continue</span></>}
                 </button>
               </div>
             </div>
