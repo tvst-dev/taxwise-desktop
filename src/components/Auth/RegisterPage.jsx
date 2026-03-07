@@ -188,27 +188,35 @@ const RegisterPage = () => {
       const initData = await initRes.json();
       if (!initData.success) throw new Error(initData.error || 'Payment setup failed');
 
-      // Step 2: Open Paystack checkout in Electron popup — user enters card there
+      // Step 2: Open Paystack inline checkout — overlays within the TaxWise window
+      const publicKey = await window.electronAPI.paystack.getPublicKey();
       setPaymentStep('card');
-      const result = await window.electronAPI.payment.openPopup(initData.authorization_url);
+      setIsLoading(false);
 
-      if (!result.success) throw new Error(result.error || 'Payment cancelled');
-
-      setPaymentStep('processing');
+      const reference = await new Promise((resolve, reject) => {
+        window.PaystackPop.setup({
+          key: publicKey,
+          access_code: initData.access_code,
+          callback: (resp) => resolve(resp.reference),
+          onClose: () => reject(new Error('Payment cancelled'))
+        }).openIframe();
+      });
 
       // Step 3: Verify payment and activate trial
-      await verifyAndComplete(result.reference, org.id);
+      setPaymentStep('processing');
+      setIsLoading(true);
+      await verifyAndComplete(reference, org.id);
 
     } catch (err) {
       console.error('Trial start error:', err);
       setPaymentStep('card');
+      setIsLoading(false);
+      if (err.message === 'Payment cancelled') return;
       if (err.message?.includes('already registered')) {
         setError('This email is already registered. Please sign in instead.');
       } else {
         setError(err.message || 'Payment failed. Please try again.');
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 

@@ -74,17 +74,6 @@
       <div class="text">Loading TaxWise...</div>
     </div>
   </div>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
 </body>
 </html>
-```
-
-**The key change is in the `connect-src` directive:**
-
-Before:
-```
-connect-src 'self' https://api.paystack.co https://api.openai.com https://api.withmono.com
-```
-
-After:
-```
-connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.paystack.co https://api.openai.com https://api.withmono.com
