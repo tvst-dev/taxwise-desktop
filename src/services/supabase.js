@@ -79,7 +79,11 @@ export const updateOrganization = async (orgId, updates) => {
 // ==================== USER PROFILES ====================
 
 export const createUserProfile = async (profileData) => {
-  const { data, error } = await supabase.from('users').insert([profileData]).select().single();
+  const { data, error } = await supabase
+    .from('users')
+    .upsert([profileData], { onConflict: 'id' })
+    .select()
+    .single();
   if (error) throw error;
   return data;
 };

@@ -191,6 +191,19 @@ function saveDatabase() {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  // Strip Cross-Origin-Resource-Policy headers from Paystack so inline.js assets
+  // load correctly inside Electron (which has no same-origin context)
+  const { session } = require('electron');
+  session.defaultSession.webRequest.onHeadersReceived(
+    { urls: ['https://*.paystack.com/*', 'https://paystack.com/*'] },
+    (details, callback) => {
+      const headers = { ...details.responseHeaders };
+      delete headers['cross-origin-resource-policy'];
+      delete headers['Cross-Origin-Resource-Policy'];
+      callback({ responseHeaders: headers });
+    }
+  );
+
   await initializeDatabase();
   createWindow();
 

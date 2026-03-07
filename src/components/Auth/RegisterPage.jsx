@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, Calculator, AlertCircle, Loader, Check,
   Building2, Users, Zap, Lock, Shield, Star
 } from 'lucide-react';
-import { signUp, createOrganization, createUserProfile } from '../../services/supabase';
+import { signUp, createOrganization, createUserProfile, getUserProfile, getOrganization } from '../../services/supabase';
 import { useAuthStore } from '../../store';
 import config from '../../config';
 import toast from 'react-hot-toast';
@@ -135,6 +135,18 @@ const RegisterPage = () => {
     const { user } = await signUp(email, password, { first_name: firstName, last_name: lastName });
     if (!user) throw new Error('Registration failed');
     setCreatedUser(user);
+
+    // If this user already has a profile+org from a previous failed attempt, reuse them
+    try {
+      const existingProfile = await getUserProfile(user.id);
+      if (existingProfile?.organization_id) {
+        const existingOrg = await getOrganization(existingProfile.organization_id);
+        setCreatedOrg(existingOrg);
+        return { user, org: existingOrg };
+      }
+    } catch (_) {
+      // No existing profile — create fresh below
+    }
 
     const org = await createOrganization({
       name: businessName,
