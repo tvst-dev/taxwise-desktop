@@ -163,7 +163,7 @@ function App() {
         const isBlocked = !organization?.subscription_status || !allowedStatuses.includes(organization.subscription_status);
         setSubscriptionBlocked(isBlocked);
 
-        if (organization?.id) {
+        if (organization?.id && !isBlocked) {
           try {
             await loadOrganizationData(organization.id);
           } catch (err) {

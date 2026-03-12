@@ -191,18 +191,13 @@ function saveDatabase() {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  // Fix Paystack inline.js CSS: the file returns text/html with a same-origin
-  // CORP header. Strip the CORP header and force Content-Type to text/css.
+  // Cancel Paystack's button CSS request — their server returns 403 for
+  // non-paystack.com origins. Cancelling avoids the error entirely;
+  // the CSS is only used for a "Pay with Paystack" button we don't render.
   const { session } = require('electron');
-  session.defaultSession.webRequest.onHeadersReceived(
+  session.defaultSession.webRequest.onBeforeRequest(
     { urls: ['https://paystack.com/public/css/button.min.css'] },
-    (details, callback) => {
-      const headers = { ...details.responseHeaders };
-      delete headers['cross-origin-resource-policy'];
-      delete headers['Cross-Origin-Resource-Policy'];
-      headers['content-type'] = ['text/css'];
-      callback({ responseHeaders: headers });
-    }
+    (details, callback) => callback({ cancel: true })
   );
 
   await initializeDatabase();
