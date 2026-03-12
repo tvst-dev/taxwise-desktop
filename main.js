@@ -191,15 +191,6 @@ function saveDatabase() {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  // Cancel Paystack's button CSS request — their server returns 403 for
-  // non-paystack.com origins. Cancelling avoids the error entirely;
-  // the CSS is only used for a "Pay with Paystack" button we don't render.
-  const { session } = require('electron');
-  session.defaultSession.webRequest.onBeforeRequest(
-    { urls: ['https://paystack.com/public/css/button.min.css'] },
-    (details, callback) => callback({ cancel: true })
-  );
-
   await initializeDatabase();
   createWindow();
 

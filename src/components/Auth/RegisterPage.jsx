@@ -160,6 +160,15 @@ const RegisterPage = () => {
     else setStep(step - 1);
   };
 
+  const loadPaystackInline = () => new Promise((resolve, reject) => {
+    if (window.PaystackPop) { resolve(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Failed to load payment SDK. Check your internet connection.'));
+    document.head.appendChild(script);
+  });
+
   const handleStartTrial = async () => {
     setError('');
     if (!createdUser || !createdOrg) {
@@ -173,7 +182,7 @@ const RegisterPage = () => {
       const user = createdUser;
       const org = createdOrg;
 
-      // Step 1: Initialize transaction — works with ALL card types worldwide
+      // Step 1: Initialize transaction on the server
       const initRes = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
@@ -189,7 +198,8 @@ const RegisterPage = () => {
       const initData = await initRes.json();
       if (!initData.success) throw new Error(initData.error || 'Payment setup failed');
 
-      // Step 2: Open Paystack inline checkout — overlays within the TaxWise window
+      // Step 2: Load Paystack SDK on-demand (after window.onload — avoids CSS noise)
+      await loadPaystackInline();
       setPaymentStep('card');
       setIsLoading(false);
 
