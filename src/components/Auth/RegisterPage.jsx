@@ -190,13 +190,12 @@ const RegisterPage = () => {
       if (!initData.success) throw new Error(initData.error || 'Payment setup failed');
 
       // Step 2: Open Paystack inline checkout — overlays within the TaxWise window
-      const publicKey = await window.electronAPI.paystack.getPublicKey();
       setPaymentStep('card');
       setIsLoading(false);
 
       const reference = await new Promise((resolve, reject) => {
         window.PaystackPop.setup({
-          key: publicKey,
+          key: config.PAYSTACK_PUBLIC_KEY,
           access_code: initData.access_code,
           callback: (resp) => resolve(resp.reference),
           onClose: () => reject(new Error('Payment cancelled'))

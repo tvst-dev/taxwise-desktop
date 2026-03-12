@@ -158,13 +158,10 @@ function App() {
         login(user, organization);
         updateFeatureFlags(organization?.subscription_tier || 'startup');
 
-        // Block access for expired/cancelled/past_due subscriptions
-        const blockedStatuses = ['past_due', 'expired', 'cancelled'];
-        if (organization?.subscription_status && blockedStatuses.includes(organization.subscription_status)) {
-          setSubscriptionBlocked(true);
-        } else {
-          setSubscriptionBlocked(false);
-        }
+        // Block access until payment is verified (pending) or subscription is no longer active
+        const allowedStatuses = ['trial', 'active'];
+        const isBlocked = !organization?.subscription_status || !allowedStatuses.includes(organization.subscription_status);
+        setSubscriptionBlocked(isBlocked);
 
         if (organization?.id) {
           try {

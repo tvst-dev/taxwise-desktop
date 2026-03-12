@@ -14,6 +14,11 @@ const SubscriptionExpired = ({ onReactivate }) => {
     : '';
 
   const statusMessages = {
+    pending: {
+      title: 'Payment Required',
+      subtitle: 'Your account is set up but payment has not been verified yet.',
+      detail: 'Please sign out, go to Register, and complete the payment step to activate your 14-day free trial.'
+    },
     past_due: {
       title: 'Payment Failed',
       subtitle: 'We were unable to charge your card for this billing period.',
