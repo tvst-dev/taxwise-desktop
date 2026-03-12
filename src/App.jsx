@@ -37,11 +37,15 @@ import API from './components/API/API';
 import Team from './components/Team/Team';
 import UpdateNotification from './components/UpdateNotification';
 
-// Protected Route
+// Protected Route — also enforces subscription gate
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, organization } = useAuthStore();
   if (isLoading) return null;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  const allowedStatuses = ['trial', 'active'];
+  if (organization && !allowedStatuses.includes(organization.subscription_status)) {
+    return <SubscriptionExpired />;
+  }
   return children;
 };
 
@@ -55,7 +59,6 @@ const PublicRoute = ({ children }) => {
 
 function App() {
   const [appReady, setAppReady] = useState(false);
-  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   const { login, logout, setLoading, isLoading } = useAuthStore();
 
   useEffect(() => {
@@ -158,12 +161,8 @@ function App() {
         login(user, organization);
         updateFeatureFlags(organization?.subscription_tier || 'startup');
 
-        // Block access until payment is verified (pending) or subscription is no longer active
         const allowedStatuses = ['trial', 'active'];
-        const isBlocked = !organization?.subscription_status || !allowedStatuses.includes(organization.subscription_status);
-        setSubscriptionBlocked(isBlocked);
-
-        if (organization?.id && !isBlocked) {
+        if (organization?.id && allowedStatuses.includes(organization.subscription_status)) {
           try {
             await loadOrganizationData(organization.id);
           } catch (err) {
@@ -220,16 +219,6 @@ function App() {
           <p style={styles.loadingText}>Starting TaxWise...</p>
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
-  // Show subscription expired screen for blocked accounts (after app is ready and user is authenticated)
-  if (appReady && !isLoading && subscriptionBlocked) {
-    return (
-      <div style={styles.appContainer}>
-        <TitleBar />
-        <SubscriptionExpired onReactivate={() => setSubscriptionBlocked(false)} />
       </div>
     );
   }

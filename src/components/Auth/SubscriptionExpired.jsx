@@ -1,10 +1,13 @@
-import React from 'react';
-import { AlertCircle, RefreshCw, LogOut, Calculator } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertCircle, RefreshCw, LogOut, Loader } from 'lucide-react';
 import { useAuthStore } from '../../store';
 import { SUBSCRIPTION_PLANS } from '../../services/subscriptionService';
+import config from '../../config';
 
-const SubscriptionExpired = ({ onReactivate }) => {
-  const { organization, logout } = useAuthStore();
+const SubscriptionExpired = () => {
+  const { user, organization, login, logout } = useAuthStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const tier = organization?.subscription_tier || 'sme';
   const status = organization?.subscription_status || 'expired';
@@ -12,17 +15,18 @@ const SubscriptionExpired = ({ onReactivate }) => {
   const planPrice = SUBSCRIPTION_PLANS[tier]?.monthlyPrice
     ? `₦${SUBSCRIPTION_PLANS[tier].monthlyPrice.toLocaleString()}/month + VAT`
     : '';
+  const isTrial = status === 'pending';
 
   const statusMessages = {
     pending: {
       title: 'Payment Required',
-      subtitle: 'Your account is set up but payment has not been verified yet.',
-      detail: 'Please sign out, go to Register, and complete the payment step to activate your 14-day free trial.'
+      subtitle: 'Your account is ready — complete payment to start your 14-day free trial.',
+      detail: 'A ₦100 refundable card verification charge will be applied. Your card is stored for automatic billing after the trial.'
     },
     past_due: {
       title: 'Payment Failed',
       subtitle: 'We were unable to charge your card for this billing period.',
-      detail: 'Your access has been paused. Please update your payment method to continue.'
+      detail: 'Enter your card details below to reactivate your subscription.'
     },
     expired: {
       title: 'Subscription Expired',
@@ -38,8 +42,65 @@ const SubscriptionExpired = ({ onReactivate }) => {
 
   const msg = statusMessages[status] || statusMessages.expired;
 
-  const handleLogout = () => {
-    logout();
+  const loadPaystackInline = () => new Promise((resolve, reject) => {
+    if (window.PaystackPop) { resolve(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Failed to load payment SDK. Check your connection.'));
+    document.head.appendChild(script);
+  });
+
+  const handlePayment = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const initRes = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
+        body: JSON.stringify({
+          action: 'initialize',
+          email: user.email,
+          is_trial: isTrial,
+          plan: tier,
+          organization_id: organization.id
+        })
+      });
+      const initData = await initRes.json();
+      if (!initData.success) throw new Error(initData.error || 'Payment setup failed');
+
+      await loadPaystackInline();
+
+      const reference = await new Promise((resolve, reject) => {
+        window.PaystackPop.setup({
+          key: config.PAYSTACK_PUBLIC_KEY,
+          access_code: initData.access_code,
+          callback: (resp) => resolve(resp.reference),
+          onClose: () => reject(new Error('Payment cancelled'))
+        }).openIframe();
+      });
+
+      const verifyRes = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
+        body: JSON.stringify({
+          action: 'verify',
+          reference,
+          organization_id: organization.id,
+          plan: tier,
+          is_trial: isTrial
+        })
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) throw new Error(verifyData.error || 'Verification failed');
+
+      // Update store — ProtectedRoute will re-render and allow access
+      login(user, { ...organization, subscription_status: isTrial ? 'trial' : 'active' });
+    } catch (err) {
+      if (err.message !== 'Payment cancelled') setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -74,12 +135,17 @@ const SubscriptionExpired = ({ onReactivate }) => {
         </div>
 
         {/* Actions */}
+        {error && (
+          <p style={{ color: '#EF4444', fontSize: 13, textAlign: 'center', margin: '0 0 4px' }}>{error}</p>
+        )}
         <div style={styles.actions}>
-          <button style={styles.primaryBtn} onClick={onReactivate}>
-            <RefreshCw size={18} />
-            Reactivate Subscription
+          <button style={{ ...styles.primaryBtn, opacity: isLoading ? 0.7 : 1 }} onClick={handlePayment} disabled={isLoading}>
+            {isLoading
+              ? <><Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</>
+              : <><RefreshCw size={18} />{isTrial ? 'Start 14-Day Free Trial' : 'Reactivate Subscription'}</>
+            }
           </button>
-          <button style={styles.logoutBtn} onClick={handleLogout}>
+          <button style={styles.logoutBtn} onClick={logout} disabled={isLoading}>
             <LogOut size={16} />
             Sign Out
           </button>
@@ -215,3 +281,8 @@ const styles = {
 };
 
 export default SubscriptionExpired;
+
+// inject spin keyframe once
+const styleEl = document.createElement('style');
+styleEl.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+document.head.appendChild(styleEl);

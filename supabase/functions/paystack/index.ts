@@ -58,17 +58,19 @@ serve(async (req) => {
     if (action !== "webhook") {
       const authHeader = req.headers.get("Authorization");
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+      // Service role client bypasses RLS for all DB writes
+      supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+      // Identify calling user when auth token is present
       if (authHeader) {
-        supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        const userClient = createClient(supabaseUrl, supabaseAnonKey, {
           global: { headers: { Authorization: authHeader } }
         });
-        const { data } = await supabase.auth.getUser();
+        const { data } = await userClient.auth.getUser();
         user = data?.user;
-      } else {
-        // Allow unauthenticated for initial registration charge
-        supabase = createClient(supabaseUrl, supabaseAnonKey);
       }
     }
 

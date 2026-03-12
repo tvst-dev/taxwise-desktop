@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_org ON subscriptions(organization_id);
 
 -- updated_at trigger
+DROP TRIGGER IF EXISTS update_subscriptions_updated_at ON subscriptions;
 CREATE TRIGGER update_subscriptions_updated_at
   BEFORE UPDATE ON subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

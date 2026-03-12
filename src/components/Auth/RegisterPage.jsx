@@ -246,7 +246,10 @@ const RegisterPage = () => {
     if (data.success) {
       setPaymentStep('success');
       toast.success('14-day trial started! Welcome to TaxWise.');
-      setTimeout(() => navigate('/login'), 2500);
+      // Immediately update the auth store so ProtectedRoute sees 'trial' status
+      const { user: su, organization: so, login: sl } = useAuthStore.getState();
+      sl(su, { ...so, subscription_status: 'trial' });
+      setTimeout(() => navigate('/dashboard'), 2500);
     } else {
       throw new Error(data.error || 'Verification failed');
     }
