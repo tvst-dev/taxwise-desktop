@@ -49,11 +49,15 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Public Route
+// Public Route — only redirect away if the user has a working subscription.
+// A 'pending' user must stay on /register to complete Step 4 (payment).
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, organization } = useAuthStore();
   if (isLoading) return null;
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  const allowedStatuses = ['trial', 'active'];
+  if (isAuthenticated && organization && allowedStatuses.includes(organization.subscription_status)) {
+    return <Navigate to="/dashboard" replace />;
+  }
   return children;
 };
 

@@ -105,6 +105,7 @@ const SubscriptionExpired = () => {
 
   return (
     <div style={styles.container}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <div style={styles.card}>
         {/* Icon */}
         <div style={styles.iconWrapper}>
@@ -281,8 +282,3 @@ const styles = {
 };
 
 export default SubscriptionExpired;
-
-// inject spin keyframe once
-const styleEl = document.createElement('style');
-styleEl.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-document.head.appendChild(styleEl);

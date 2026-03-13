@@ -10,7 +10,10 @@
 ALTER TABLE organizations
   ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS paystack_customer_code VARCHAR(100),
   ADD COLUMN IF NOT EXISTS paystack_authorization_code TEXT,
+  ADD COLUMN IF NOT EXISTS paystack_subscription_code VARCHAR(100),
   ADD COLUMN IF NOT EXISTS card_last4 VARCHAR(4),
   ADD COLUMN IF NOT EXISTS card_brand VARCHAR(50),
   ADD COLUMN IF NOT EXISTS card_exp_month VARCHAR(2),

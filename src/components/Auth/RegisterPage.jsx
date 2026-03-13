@@ -123,6 +123,11 @@ const RegisterPage = () => {
     if (step === 1 && validateStep1()) { setStep(2); return; }
     if (step === 2 && validateStep2()) { setStep(3); return; }
     if (step === 3) {
+      // If account was already created (user went back from Step 4), skip straight to Step 4
+      if (createdUser && createdOrg) {
+        setStep(4);
+        return;
+      }
       // Create account + org once when advancing to the payment step
       setIsLoading(true);
       try {
@@ -428,7 +433,7 @@ const RegisterPage = () => {
                   <h3 style={styles.successTitle}>Your 14-Day Trial Has Started</h3>
                   <p style={styles.successText}>
                     Full {selectedPlanData?.name} access activated. Your card won't be charged until day 15.
-                    Redirecting to sign in…
+                    Redirecting to your dashboard…
                   </p>
                 </div>
               )}
