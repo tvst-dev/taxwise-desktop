@@ -75,6 +75,7 @@ const SubscriptionExpired = () => {
         window.PaystackPop.setup({
           key: config.PAYSTACK_PUBLIC_KEY,
           email: user.email,
+          amount: initData.amount,
           access_code: initData.access_code,
           callback: (resp) => resolve(resp.reference),
           onClose: () => reject(new Error('Payment cancelled'))

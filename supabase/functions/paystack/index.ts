@@ -158,6 +158,7 @@ async function handleInitialize(payload: Record<string, unknown>, secretKey: str
     authorization_url: data.data.authorization_url,
     reference: data.data.reference,
     access_code: data.data.access_code,
+    amount, // kobo — frontend passes this to PaystackPop.setup() to satisfy inline.js validation
   });
 }
 
