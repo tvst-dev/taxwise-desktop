@@ -211,6 +211,7 @@ const RegisterPage = () => {
       const reference = await new Promise((resolve, reject) => {
         window.PaystackPop.setup({
           key: config.PAYSTACK_PUBLIC_KEY,
+          email,
           access_code: initData.access_code,
           callback: (resp) => resolve(resp.reference),
           onClose: () => reject(new Error('Payment cancelled'))
