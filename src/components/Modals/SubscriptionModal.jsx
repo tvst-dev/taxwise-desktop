@@ -140,7 +140,7 @@ const SubscriptionModal = () => {
       if (data.success) {
         setPaymentReference(data.reference);
 
-        if (data.status === 'success') {
+        if (data.status === 'success' || data.status === 'charge_attempted') {
           await verifyAndComplete(data.reference);
         } else if (data.status === 'send_otp' || data.status === 'send_pin') {
           setView('otp');
@@ -218,7 +218,8 @@ const SubscriptionModal = () => {
           action: 'verify',
           reference,
           organization_id: organization.id,
-          plan: selectedPlan
+          plan: selectedPlan,
+          is_trial: false
         })
       });
 
@@ -264,7 +265,8 @@ const SubscriptionModal = () => {
             action: 'verify',
             reference,
             organization_id: organization.id,
-            plan: selectedPlan
+            plan: selectedPlan,
+            is_trial: false
           })
         });
 

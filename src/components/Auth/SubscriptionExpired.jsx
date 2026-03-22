@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
-import { AlertCircle, RefreshCw, LogOut, Loader } from 'lucide-react';
+import React from 'react';
+import { AlertCircle, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../store';
 import { SUBSCRIPTION_PLANS } from '../../services/subscriptionService';
-import config from '../../config';
+import PaymentForm from '../Payment/PaymentForm';
 
 const SubscriptionExpired = () => {
   const { user, organization, login, logout } = useAuthStore();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const tier = organization?.subscription_tier || 'sme';
   const status = organization?.subscription_status || 'expired';
@@ -16,6 +14,8 @@ const SubscriptionExpired = () => {
     ? `₦${SUBSCRIPTION_PLANS[tier].monthlyPrice.toLocaleString()}/month + VAT`
     : '';
   const isTrial = status === 'pending';
+  // Amount in Naira: ₦100 for card verification (trial), full plan price for reactivation
+  const paymentAmount = isTrial ? 100 : (SUBSCRIPTION_PLANS[tier]?.monthlyPrice || 10000);
 
   const statusMessages = {
     pending: {
@@ -42,67 +42,8 @@ const SubscriptionExpired = () => {
 
   const msg = statusMessages[status] || statusMessages.expired;
 
-  const loadPaystackInline = () => new Promise((resolve, reject) => {
-    if (window.PaystackPop) { resolve(); return; }
-    const script = document.createElement('script');
-    script.src = 'https://js.paystack.co/v1/inline.js';
-    script.onload = resolve;
-    script.onerror = () => reject(new Error('Failed to load payment SDK. Check your connection.'));
-    document.head.appendChild(script);
-  });
-
-  const handlePayment = async () => {
-    setError('');
-    setIsLoading(true);
-    try {
-      const initRes = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
-        body: JSON.stringify({
-          action: 'initialize',
-          email: user.email,
-          is_trial: isTrial,
-          plan: tier,
-          organization_id: organization.id
-        })
-      });
-      const initData = await initRes.json();
-      if (!initData.success) throw new Error(initData.error || 'Payment setup failed');
-
-      await loadPaystackInline();
-
-      const reference = await new Promise((resolve, reject) => {
-        window.PaystackPop.setup({
-          key: config.PAYSTACK_PUBLIC_KEY,
-          email: user.email,
-          amount: initData.amount,
-          access_code: initData.access_code,
-          callback: (resp) => resolve(resp.reference),
-          onClose: () => reject(new Error('Payment cancelled'))
-        }).openIframe();
-      });
-
-      const verifyRes = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
-        body: JSON.stringify({
-          action: 'verify',
-          reference,
-          organization_id: organization.id,
-          plan: tier,
-          is_trial: isTrial
-        })
-      });
-      const verifyData = await verifyRes.json();
-      if (!verifyData.success) throw new Error(verifyData.error || 'Verification failed');
-
-      // Update store — ProtectedRoute will re-render and allow access
-      login(user, { ...organization, subscription_status: isTrial ? 'trial' : 'active' });
-    } catch (err) {
-      if (err.message !== 'Payment cancelled') setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
+  const handlePaymentSuccess = () => {
+    login(user, { ...organization, subscription_status: isTrial ? 'trial' : 'active' });
   };
 
   return (
@@ -137,22 +78,23 @@ const SubscriptionExpired = () => {
           )}
         </div>
 
-        {/* Actions */}
-        {error && (
-          <p style={{ color: '#EF4444', fontSize: 13, textAlign: 'center', margin: '0 0 4px' }}>{error}</p>
-        )}
-        <div style={styles.actions}>
-          <button style={{ ...styles.primaryBtn, opacity: isLoading ? 0.7 : 1 }} onClick={handlePayment} disabled={isLoading}>
-            {isLoading
-              ? <><Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</>
-              : <><RefreshCw size={18} />{isTrial ? 'Start 14-Day Free Trial' : 'Reactivate Subscription'}</>
-            }
-          </button>
-          <button style={styles.logoutBtn} onClick={logout} disabled={isLoading}>
-            <LogOut size={16} />
-            Sign Out
-          </button>
+        {/* Payment Form */}
+        <div style={{ width: '100%' }}>
+          <PaymentForm
+            email={user?.email}
+            amount={paymentAmount}
+            plan={tier}
+            organizationId={organization?.id}
+            isTrial={isTrial}
+            onSuccess={handlePaymentSuccess}
+            onError={() => {}}
+            buttonText={isTrial ? 'Start 14-Day Free Trial' : 'Reactivate Subscription'}
+          />
         </div>
+        <button style={styles.logoutBtn} onClick={logout}>
+          <LogOut size={16} />
+          Sign Out
+        </button>
 
         <p style={styles.help}>
           Need help? Contact us at{' '}

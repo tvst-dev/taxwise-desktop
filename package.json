@@ -63,8 +63,7 @@
       {
         "provider": "github",
         "owner": "tvst-dev",
-        "repo": "taxwise-desktop",
-        "private": true
+        "repo": "taxwise-desktop"
       }
     ]
   },

@@ -7,12 +7,13 @@ import { CreditCard, Lock, Calendar, Shield, Loader2, CheckCircle, AlertCircle }
 import toast from 'react-hot-toast';
 import config from '../../config';
 
-const PaymentForm = ({ 
-  email, 
-  amount, 
-  plan, 
+const PaymentForm = ({
+  email,
+  amount,
+  plan,
   organizationId,
-  onSuccess, 
+  isTrial = false,
+  onSuccess,
   onError,
   buttonText = 'Pay Now'
 }) => {
@@ -112,19 +113,16 @@ const PaymentForm = ({
 
       if (data.success) {
         setReference(data.reference);
-        
-        if (data.status === 'success') {
-          // Payment successful, verify and save authorization
+
+        if (data.status === 'success' || data.status === 'charge_attempted') {
           await verifyPayment(data.reference);
         } else if (data.status === 'send_otp' || data.status === 'send_pin') {
           setStep('otp');
           toast.success(data.display_text || 'Please enter the OTP sent to your phone');
         } else if (data.status === '3ds_required') {
           setStep('3ds');
-          // Open 3DS URL in new window
           window.open(data.url, '_blank', 'width=500,height=600');
           toast.success('Complete authentication in the new window');
-          // Poll for completion
           pollForCompletion(data.reference);
         }
       } else {
@@ -195,7 +193,8 @@ const PaymentForm = ({
           action: 'verify',
           reference: ref,
           organization_id: organizationId,
-          plan
+          plan,
+          is_trial: isTrial
         })
       });
 
@@ -240,12 +239,13 @@ const PaymentForm = ({
             action: 'verify',
             reference: ref,
             organization_id: organizationId,
-            plan
+            plan,
+            is_trial: isTrial
           })
         });
 
         const data = await response.json();
-        
+
         if (data.success) {
           setStep('success');
           toast.success('Payment successful!');

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You're invited to TaxWise</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0D1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0D1117;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+          <!-- Logo / Brand -->
+          <tr>
+            <td align="center" style="padding-bottom:32px;">
+              <div style="display:inline-flex;align-items:center;gap:10px;">
+                <div style="width:40px;height:40px;background-color:#2563EB;border-radius:10px;display:inline-block;text-align:center;line-height:40px;">
+                  <span style="color:white;font-size:20px;font-weight:700;">T</span>
+                </div>
+                <span style="font-size:24px;font-weight:700;color:#E6EDF3;vertical-align:middle;margin-left:10px;">TaxWise</span>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background-color:#161B22;border:1px solid #30363D;border-radius:16px;padding:40px;">
+
+              <!-- Heading -->
+              <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#E6EDF3;text-align:center;">
+                You've been invited
+              </h1>
+              <p style="margin:0 0 32px;font-size:15px;color:#8B949E;text-align:center;line-height:1.6;">
+                A team admin has invited you to join their organization on TaxWise — Nigeria's smart tax and accounting platform.
+              </p>
+
+              <!-- Divider -->
+              <div style="border-top:1px solid #30363D;margin-bottom:32px;"></div>
+
+              <!-- What is TaxWise -->
+              <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#8B949E;text-transform:uppercase;letter-spacing:0.05em;">
+                What is TaxWise?
+              </p>
+              <p style="margin:0 0 32px;font-size:14px;color:#8B949E;line-height:1.7;">
+                TaxWise is a desktop accounting and tax management app for Nigerian businesses. It helps teams track income &amp; expenses, calculate taxes (VAT, WHT, PAYE), manage documents, and generate financial reports — all in one place.
+              </p>
+
+              <!-- CTA Button -->
+              <!--
+                IMPORTANT: We build the confirmation URL manually using the Supabase project URL
+                instead of {{ .ConfirmationURL }} (which would use the Site URL = localhost:3000).
+                This ensures the link always points to the correct Supabase project endpoint.
+              -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+                <tr>
+                  <td align="center">
+                    <a href="https://xgicdlwxjkqtarfytbgz.supabase.co/auth/v1/verify?token={{ .TokenHash }}&type={{ .Email.Type }}&redirect_to={{ .RedirectTo }}"
+                       style="display:inline-block;padding:14px 40px;background-color:#2563EB;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;letter-spacing:0.01em;">
+                      Accept Invitation
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Steps -->
+              <p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#8B949E;text-transform:uppercase;letter-spacing:0.05em;">
+                Getting started
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:10px 0;border-bottom:1px solid #21262D;">
+                    <span style="display:inline-block;width:24px;height:24px;background-color:rgba(37,99,235,0.15);border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:700;color:#2563EB;margin-right:12px;vertical-align:middle;">1</span>
+                    <span style="font-size:14px;color:#E6EDF3;vertical-align:middle;">Click <strong>Accept Invitation</strong> above</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;border-bottom:1px solid #21262D;">
+                    <span style="display:inline-block;width:24px;height:24px;background-color:rgba(37,99,235,0.15);border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:700;color:#2563EB;margin-right:12px;vertical-align:middle;">2</span>
+                    <span style="font-size:14px;color:#E6EDF3;vertical-align:middle;">Your browser will prompt you to open <strong>TaxWise</strong> — click Allow</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;">
+                    <span style="display:inline-block;width:24px;height:24px;background-color:rgba(37,99,235,0.15);border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:700;color:#2563EB;margin-right:12px;vertical-align:middle;">3</span>
+                    <span style="font-size:14px;color:#E6EDF3;vertical-align:middle;">TaxWise opens and signs you in automatically</span>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <div style="border-top:1px solid #30363D;margin:32px 0 24px;"></div>
+
+              <!-- Link fallback -->
+              <p style="margin:0;font-size:12px;color:#6E7681;line-height:1.6;text-align:center;">
+                If the button above doesn't work, copy and paste this link into your browser:<br/>
+                <a href="https://xgicdlwxjkqtarfytbgz.supabase.co/auth/v1/verify?token={{ .TokenHash }}&type={{ .Email.Type }}&redirect_to={{ .RedirectTo }}"
+                   style="color:#2563EB;word-break:break-all;">
+                  https://xgicdlwxjkqtarfytbgz.supabase.co/auth/v1/verify?token={{ .TokenHash }}&type={{ .Email.Type }}&redirect_to={{ .RedirectTo }}
+                </a>
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding-top:24px;">
+              <p style="margin:0;font-size:12px;color:#6E7681;line-height:1.6;">
+                This invitation was sent from TaxWise. If you weren't expecting it, you can safely ignore this email.<br/>
+                &copy; TaxWise — Built for Nigerian businesses
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

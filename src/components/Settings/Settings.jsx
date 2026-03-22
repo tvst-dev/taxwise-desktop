@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
-  User, Building2, Users, Sparkles, CreditCard, Link2,
+  User, Building2, Users, Sparkles, CreditCard,
   Save, Camera, Mail, Phone, MapPin, Globe, Shield,
   Bell, Eye, EyeOff, Plus, Trash2, Edit2, Check, X,
   ChevronRight, AlertCircle, ShoppingCart, Landmark, Code,
   FileText, RefreshCw, ExternalLink, Crown, Zap
 } from 'lucide-react';
+import PaymentForm from '../Payment/PaymentForm';
 import { 
   useAuthStore, useSettingsStore, useFeaturesStore, 
   useTeamStore, useUIStore 
@@ -51,13 +52,21 @@ const Settings = () => {
 
   const [isEditing, setIsEditing] = useState({});
 
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  const PLAN_DISPLAY = {
+    startup: { name: 'Startup Plan', price: 10000 },
+    sme: { name: 'SME Plan', price: 25000 },
+    corporate: { name: 'Corporate Plan', price: 60000 },
+    free: { name: 'Free Plan', price: 0 }
+  };
+
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'organization', label: 'Organization', icon: Building2 },
     { id: 'team', label: 'Team', icon: Users },
     { id: 'features', label: 'Features', icon: Sparkles },
-    { id: 'billing', label: 'Billing', icon: CreditCard },
-    { id: 'integrations', label: 'Integrations', icon: Link2 }
+    { id: 'billing', label: 'Billing', icon: CreditCard }
   ];
 
   const roles = [
@@ -479,7 +488,7 @@ const Settings = () => {
               </div>
               <ToggleSwitch
                 checked={false}
-                onChange={() => toast.info('Auto-Bank Tracking is coming soon. Stay tuned!')}
+                onChange={() => toast('Auto-Bank Tracking coming soon — stay tuned!')}
               />
             </div>
             <p style={styles.featureDescription}>
@@ -532,174 +541,126 @@ const Settings = () => {
     </div>
   );
 
-  const renderBillingTab = () => (
-    <div style={styles.tabContent}>
-      <div style={styles.sectionHeader}>
-        <h3 style={styles.sectionTitle}>Billing & Subscription</h3>
-        <p style={styles.sectionDescription}>Manage your subscription plan and payment methods.</p>
-      </div>
+  const renderBillingTab = () => {
+    const tier = organization?.subscription_tier || 'sme';
+    const status = organization?.subscription_status || 'pending';
+    const planInfo = PLAN_DISPLAY[tier] || PLAN_DISPLAY.sme;
+    const statusColors = {
+      trial: '#22C55E', active: '#22C55E', pending: '#F59E0B',
+      past_due: '#EF4444', expired: '#EF4444', cancelled: '#6E7681'
+    };
+    const statusLabels = {
+      trial: 'Trial', active: 'Active', pending: 'Pending',
+      past_due: 'Past Due', expired: 'Expired', cancelled: 'Cancelled'
+    };
+    const badgeColor = statusColors[status] || '#6E7681';
+    const isTrial = status === 'pending';
+    const paymentAmount = isTrial ? 100 : planInfo.price;
 
-      {/* Current Plan */}
-      <div style={styles.planCard}>
-        <div style={styles.planHeader}>
-          <div>
-            <span style={styles.planLabel}>Current Plan</span>
-            <h4 style={styles.planName}>SME Plan</h4>
-          </div>
-          <span style={styles.planBadge}>Active</span>
+    return (
+      <div style={styles.tabContent}>
+        <div style={styles.sectionHeader}>
+          <h3 style={styles.sectionTitle}>Billing & Subscription</h3>
+          <p style={styles.sectionDescription}>Manage your subscription plan and payment methods.</p>
         </div>
-        <div style={styles.planPrice}>
-          <span style={styles.priceAmount}>₦24,999</span>
-          <span style={styles.pricePeriod}>/month</span>
-        </div>
-        <div style={styles.planFeatures}>
-          <div style={styles.planFeature}>
-            <Check size={14} color="#22C55E" />
-            <span>Up to 5 users</span>
-          </div>
-          <div style={styles.planFeature}>
-            <Check size={14} color="#22C55E" />
-            <span>1 Bank account integration</span>
-          </div>
-          <div style={styles.planFeature}>
-            <Check size={14} color="#22C55E" />
-            <span>100 monthly calculations</span>
-          </div>
-          <div style={styles.planFeature}>
-            <Check size={14} color="#22C55E" />
-            <span>50 document uploads</span>
-          </div>
-        </div>
-        <div style={styles.planActions}>
-          <button 
-            style={styles.upgradeButton}
-            onClick={() => openModal('subscription')}
-          >
-            <Zap size={16} />
-            <span>Upgrade Plan</span>
-          </button>
-          <button style={styles.manageButton}>
-            Manage Subscription
-          </button>
-        </div>
-      </div>
 
-      {/* Billing Info */}
-      <div style={styles.billingSection}>
-        <h4 style={styles.subsectionTitle}>Payment Method</h4>
-        {/* TODO: Integrate with Paystack for payment method management */}
-        <div style={styles.emptyPayment}>
-          <CreditCard size={32} color="#6E7681" />
-          <p style={styles.emptyText}>No payment method added</p>
-          <button 
-            style={styles.addPaymentButton}
-            onClick={() => toast.info('Payment integration coming soon')}
-          >
-            <Plus size={16} />
-            Add Payment Method
-          </button>
-        </div>
-      </div>
-
-      {/* Billing History */}
-      <div style={styles.billingSection}>
-        <h4 style={styles.subsectionTitle}>Billing History</h4>
-        {/* TODO: Fetch from backend API */}
-        <div style={styles.emptyInvoices}>
-          <FileText size={32} color="#6E7681" />
-          <p style={styles.emptyText}>No billing history yet</p>
-          <span style={styles.emptyHint}>Your invoices will appear here once you subscribe</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderIntegrationsTab = () => (
-    <div style={styles.tabContent}>
-      <div style={styles.sectionHeader}>
-        <h3 style={styles.sectionTitle}>Integrations</h3>
-        <p style={styles.sectionDescription}>Connect TaxWise with external services.</p>
-      </div>
-
-      <div style={styles.integrationsList}>
-        {/* Auto-Bank Tracking Integration */}
-        <div style={styles.integrationCard}>
-          <div style={styles.integrationIcon}>
-            <Landmark size={32} color="#22C55E" />
+        {/* Current Plan */}
+        <div style={styles.planCard}>
+          <div style={styles.planHeader}>
+            <div>
+              <span style={styles.planLabel}>Current Plan</span>
+              <h4 style={styles.planName}>{planInfo.name}</h4>
+            </div>
+            <span style={{ ...styles.planBadge, backgroundColor: `${badgeColor}20`, color: badgeColor }}>
+              {statusLabels[status] || status}
+            </span>
           </div>
-          <div style={styles.integrationContent}>
-            <h4 style={styles.integrationName}>Auto-Bank Tracking</h4>
-            <p style={styles.integrationDescription}>
-              Automatically sync transactions from Nigerian banks including GTBank, Access Bank, 
-              First Bank, UBA, Zenith Bank, and more.
-            </p>
-            {autoBankTrackingEnabled ? (
-              <div style={styles.connectedStatus}>
-                <Check size={14} color="#22C55E" />
-                <span>Connected</span>
-                <button style={styles.disconnectButton}>Disconnect</button>
-              </div>
-            ) : (
-              <button 
-                style={styles.connectButton}
-                onClick={() => {
-                  toggleAutoBankTracking();
-                  toast.success('Auto-Bank Tracking enabled. Configure in Features tab.');
-                }}
-              >
-                Connect Bank
+          {planInfo.price > 0 && (
+            <div style={styles.planPrice}>
+              <span style={styles.priceAmount}>₦{planInfo.price.toLocaleString()}</span>
+              <span style={styles.pricePeriod}>/month + VAT</span>
+            </div>
+          )}
+          <div style={styles.planActions}>
+            <button style={styles.upgradeButton} onClick={() => openModal('subscription')}>
+              <Zap size={16} />
+              <span>Upgrade Plan</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Payment Method */}
+        <div style={styles.billingSection}>
+          <h4 style={styles.subsectionTitle}>Payment Method</h4>
+          {organization?.card_last4 ? (
+            <div style={styles.cardDisplay}>
+              <CreditCard size={20} color="#8B949E" />
+              <span style={{ color: '#E6EDF3' }}>
+                {organization.card_brand?.toUpperCase()} •••• {organization.card_last4}
+              </span>
+              <span style={{ color: '#8B949E', fontSize: 13 }}>
+                Exp {organization.card_exp_month}/{organization.card_exp_year}
+              </span>
+              <button style={styles.updateCardBtn} onClick={() => setShowPaymentModal(true)}>
+                Update Card
               </button>
-            )}
+            </div>
+          ) : (
+            <div style={styles.emptyPayment}>
+              <CreditCard size={32} color="#6E7681" />
+              <p style={styles.emptyText}>No payment method on file</p>
+              <button style={styles.addPaymentButton} onClick={() => setShowPaymentModal(true)}>
+                <Plus size={16} />
+                Add Payment Method
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Billing History */}
+        <div style={styles.billingSection}>
+          <h4 style={styles.subsectionTitle}>Billing History</h4>
+          <div style={styles.emptyInvoices}>
+            <FileText size={32} color="#6E7681" />
+            <p style={styles.emptyText}>No billing history yet</p>
+            <span style={styles.emptyHint}>Your invoices will appear here once you subscribe</span>
           </div>
         </div>
 
-        {/* Paystack Integration */}
-        <div style={styles.integrationCard}>
-          <div style={{ ...styles.integrationIcon, backgroundColor: 'rgba(0, 168, 184, 0.1)' }}>
-            <CreditCard size={32} color="#00A8B8" />
-          </div>
-          <div style={styles.integrationContent}>
-            <h4 style={styles.integrationName}>Paystack</h4>
-            <p style={styles.integrationDescription}>
-              Process subscription payments securely. PCI-DSS compliant payment processing
-              with support for Nigerian cards.
-            </p>
-            <div style={styles.connectedStatus}>
-              <Check size={14} color="#22C55E" />
-              <span>Configured</span>
+        {/* Payment Modal */}
+        {showPaymentModal && (
+          <div style={styles.modalOverlay} onClick={() => setShowPaymentModal(false)}>
+            <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h3 style={styles.modalTitle}>
+                  {isTrial ? 'Start 14-Day Free Trial' : 'Add / Update Payment Method'}
+                </h3>
+                <button style={styles.modalClose} onClick={() => setShowPaymentModal(false)}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div style={{ padding: '24px' }}>
+                <PaymentForm
+                  email={user?.email}
+                  amount={paymentAmount}
+                  plan={tier}
+                  organizationId={organization?.id}
+                  isTrial={isTrial}
+                  onSuccess={() => {
+                    setShowPaymentModal(false);
+                    toast.success(isTrial ? '14-day trial started!' : 'Payment method saved!');
+                  }}
+                  onError={(err) => toast.error(err.message)}
+                  buttonText={isTrial ? 'Start Free Trial' : 'Save Card'}
+                />
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* OpenAI Integration */}
-        <div style={styles.integrationCard}>
-          <div style={{ ...styles.integrationIcon, backgroundColor: 'rgba(16, 163, 127, 0.1)' }}>
-            <Sparkles size={32} color="#10A37F" />
-          </div>
-          <div style={styles.integrationContent}>
-            <h4 style={styles.integrationName}>AI Document Extraction</h4>
-            <p style={styles.integrationDescription}>
-              Powered by AI to automatically extract data from invoices, receipts, 
-              and other financial documents.
-            </p>
-            {documentAIEnabled ? (
-              <div style={styles.connectedStatus}>
-                <Check size={14} color="#22C55E" />
-                <span>Enabled</span>
-              </div>
-            ) : (
-              <button 
-                style={styles.connectButton}
-                onClick={() => setActiveTab('features')}
-              >
-                Enable in Features
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
+
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -708,7 +669,6 @@ const Settings = () => {
       case 'team': return renderTeamTab();
       case 'features': return renderFeaturesTab();
       case 'billing': return renderBillingTab();
-      case 'integrations': return renderIntegrationsTab();
       default: return renderProfileTab();
     }
   };
@@ -1427,6 +1387,67 @@ const styles = {
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer'
+  },
+  cardDisplay: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '16px 20px',
+    backgroundColor: '#21262D',
+    borderRadius: '10px',
+    fontSize: '14px'
+  },
+  updateCardBtn: {
+    marginLeft: 'auto',
+    padding: '8px 16px',
+    backgroundColor: 'transparent',
+    border: '1px solid #30363D',
+    borderRadius: '6px',
+    color: '#8B949E',
+    fontSize: '13px',
+    cursor: 'pointer'
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999
+  },
+  modal: {
+    width: '100%',
+    maxWidth: '480px',
+    backgroundColor: '#161B22',
+    borderRadius: '16px',
+    border: '1px solid #30363D',
+    overflow: 'hidden'
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '20px 24px',
+    borderBottom: '1px solid #30363D'
+  },
+  modalTitle: {
+    fontSize: '17px',
+    fontWeight: '600',
+    color: '#E6EDF3',
+    margin: 0
+  },
+  modalClose: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: '#8B949E',
+    cursor: 'pointer',
+    borderRadius: '6px'
   },
   primaryButton: {
     display: 'flex',

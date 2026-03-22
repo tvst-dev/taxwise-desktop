@@ -65,7 +65,7 @@ const API = () => {
   };
 
   const handleGenerateKeys = () => {
-    toast.info('API key generation will be available once backend is connected');
+    toast('API key generation will be available once backend is connected');
   };
 
   const codeExample = `// Example: Calculate Company Income Tax

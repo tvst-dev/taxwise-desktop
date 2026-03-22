@@ -119,7 +119,7 @@ const Dashboard = () => {
           </p>
         </div>
         <div style={styles.headerActions}>
-          <button style={styles.iconBtn} title="Notifications">
+          <button style={styles.iconBtn} title="Notifications" onClick={() => navigate('/reminders')}>
             <Bell size={20} />
             {(upcomingReminders.length + overdueReminders.length) > 0 && (
               <span style={styles.notificationBadge}>

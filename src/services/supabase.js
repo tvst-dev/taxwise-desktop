@@ -335,38 +335,36 @@ export const cancelInvitation = async (invitationId) => {
 };
 
 export const sendTeamInvite = async (email, role, organizationId, organizationName, inviterName) => {
-  const serviceRoleKey = config.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceRoleKey) {
-    throw new Error('Service role key not set in config.js — add SUPABASE_SERVICE_ROLE_KEY');
-  }
+  // Route through the send-invite edge function which has the service role key
+  // and handles 422 (stale pending invites) by deleting + re-inviting automatically.
+  const { data: { session } } = await supabase.auth.getSession();
 
-  const redirectTo = config.WEB_AUTH_URL || 'taxwise://auth/callback';
-  const url = `${config.SUPABASE_URL}/auth/v1/invite?redirect_to=${encodeURIComponent(redirectTo)}`;
-
-  const response = await fetch(url, {
+  const response = await fetch(`${config.SUPABASE_URL}/functions/v1/send-invite`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${serviceRoleKey}`,
-      'apikey': serviceRoleKey,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'apikey': config.SUPABASE_ANON_KEY,
+      ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
     },
-    body: JSON.stringify({
-      email,
-      data: {
-        organization_id: organizationId,
-        organization_name: organizationName || 'TaxWise',
-        role: role || 'viewer',
-        invited_by_name: inviterName || 'Your team admin'
-      }
-    })
+    body: JSON.stringify({ email, role, organizationId, organizationName, inviterName }),
   });
 
   if (!response.ok) {
     const errBody = await response.json().catch(() => ({}));
-    const msg = errBody.error_description || errBody.error || errBody.message || `Invite failed (${response.status})`;
+    const msg = errBody.error_description || errBody.msg || errBody.error || errBody.message || `Invite failed (${response.status})`;
     throw new Error(msg);
   }
   return response.json();
+};
+
+export const acceptInvitation = async (email) => {
+  // Mark any pending invitation for this email as accepted
+  const { error } = await supabase
+    .from('team_invitations')
+    .update({ status: 'accepted' })
+    .eq('email', email)
+    .eq('status', 'pending');
+  if (error) console.warn('acceptInvitation error:', error.message);
 };
 
 // ==================== SUBSCRIPTIONS ====================

@@ -102,7 +102,7 @@ const TaxCalculator = () => {
       const bestYear = Object.entries(yearCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
       if (bestYear) {
         setFiscalYear(parseInt(bestYear));
-        toast.info(`No entries for ${fiscalYear} — switched to ${bestYear} (${yearCounts[bestYear]} entries). Click "From Entries" again.`);
+        toast(`No entries for ${fiscalYear} — switched to ${bestYear} (${yearCounts[bestYear]} entries). Click "From Entries" again.`);
       } else {
         toast.error(`No entries found for fiscal year ${fiscalYear}. Try a different year.`);
       }
@@ -152,7 +152,8 @@ const TaxCalculator = () => {
         .reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
       setPayeData(prev => ({
         ...prev,
-        grossEmoluments: annualIncome,
+        // grossEmoluments is intentionally NOT set here — the calculator always
+        // derives it from (basicSalary + housing + transport + other) × 12
         basicSalary: basicSalary > 0 ? basicSalary : prev.basicSalary,
         housingAllowance: housingAllowance > 0 ? housingAllowance : prev.housingAllowance,
         transportAllowance: transportAllowance > 0 ? transportAllowance : prev.transportAllowance,
@@ -164,7 +165,7 @@ const TaxCalculator = () => {
         : `No income entries for ${fiscalYear}. Enter salary manually.`
       );
     } else {
-      toast.info('Auto-populate works best with CIT, VAT, and PAYE calculations');
+      toast('Auto-populate works best with CIT, VAT, and PAYE calculations');
     }
   };
 
@@ -225,13 +226,16 @@ const TaxCalculator = () => {
               otherAllowances: payeData.otherAllowances,
             });
           } else {
+            // Always derive annual gross from monthly components × 12
+            // Never use the hidden grossEmoluments state which can be stale from auto-populate
+            const annualGross = (
+              payeData.basicSalary +
+              payeData.housingAllowance +
+              payeData.transportAllowance +
+              payeData.otherAllowances
+            ) * 12;
             calculationResult = calculatePAYE({
-              grossEmoluments: payeData.grossEmoluments || (
-                payeData.basicSalary + 
-                payeData.housingAllowance + 
-                payeData.transportAllowance + 
-                payeData.otherAllowances
-              ) * 12,
+              grossEmoluments: annualGross,
               pensionContribution: payeData.pensionContribution,
               nhfContribution: payeData.nhfContribution,
               nhisContribution: payeData.nhisContribution,
@@ -362,7 +366,11 @@ const TaxCalculator = () => {
       input_data: inputData,
       result_data: result.summary,
       organization_id: organization?.id,
-      status: 'draft'
+      status: 'draft',
+      // Top-level columns for fast display in TaxHistory
+      net_tax_payable: netTaxPayable,
+      taxable_amount: result.summary?.taxableAmount || result.summary?.grossAmount || 0,
+      gross_amount: result.summary?.grossAmount || result.summary?.grossEmoluments || 0
     };
 
     const localCalc = {
@@ -460,6 +468,17 @@ const TaxCalculator = () => {
                 </div>
               </div>
             </div>
+
+            {/* Computed annual gross — read-only sanity display */}
+            {(payeData.basicSalary + payeData.housingAllowance + payeData.transportAllowance + payeData.otherAllowances) > 0 && (
+              <div style={{ padding: '8px 12px', backgroundColor: '#161B22', borderRadius: '6px', marginTop: '8px', marginBottom: '4px' }}>
+                <span style={{ fontSize: '12px', color: '#8B949E' }}>Annual Gross: </span>
+                <span style={{ fontSize: '13px', color: '#58A6FF', fontWeight: '500' }}>
+                  {formatCurrency((payeData.basicSalary + payeData.housingAllowance + payeData.transportAllowance + payeData.otherAllowances) * 12)}
+                </span>
+                <span style={{ fontSize: '11px', color: '#8B949E' }}> /year</span>
+              </div>
+            )}
 
             <h4 style={{ ...styles.sectionTitle, marginTop: '24px' }}>Statutory Deductions</h4>
             <div style={styles.fieldsGrid}>

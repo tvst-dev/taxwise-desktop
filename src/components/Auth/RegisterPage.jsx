@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Eye, EyeOff, Calculator, AlertCircle, Loader, Check,
-  Building2, Users, Zap, Lock, Shield, Star
+  Building2, Users, Zap, Shield, Star
 } from 'lucide-react';
 import { signUp, createOrganization, createUserProfile } from '../../services/supabase';
 import { useAuthStore } from '../../store';
-import config from '../../config';
 import toast from 'react-hot-toast';
+import PaymentForm from '../Payment/PaymentForm';
 
 const PLANS = [
   {
@@ -148,10 +148,13 @@ const RegisterPage = () => {
 
         setStep(4);
       } catch (err) {
-        if (err.message?.toLowerCase().includes('already registered') || err.message?.toLowerCase().includes('user already registered')) {
+        const msg = err.message || '';
+        if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('user already registered')) {
           setError('An account with this email already exists. Please sign in instead.');
+        } else if (msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many') || err.status === 429) {
+          setError('Too many sign-up attempts. Please wait a few minutes then try again, or use a different email address.');
         } else {
-          setError(err.message || 'Failed to create account. Please try again.');
+          setError(msg || 'Failed to create account. Please try again.');
         }
       } finally {
         setIsLoading(false);
@@ -165,101 +168,12 @@ const RegisterPage = () => {
     else setStep(step - 1);
   };
 
-  const loadPaystackInline = () => new Promise((resolve, reject) => {
-    if (window.PaystackPop) { resolve(); return; }
-    const script = document.createElement('script');
-    script.src = 'https://js.paystack.co/v1/inline.js';
-    script.onload = resolve;
-    script.onerror = () => reject(new Error('Failed to load payment SDK. Check your internet connection.'));
-    document.head.appendChild(script);
-  });
-
-  const handleStartTrial = async () => {
-    setError('');
-    if (!createdUser || !createdOrg) {
-      setError('Account setup incomplete. Please go back and try again.');
-      return;
-    }
-    setIsLoading(true);
-    setPaymentStep('processing');
-
-    try {
-      const user = createdUser;
-      const org = createdOrg;
-
-      // Step 1: Initialize transaction on the server
-      const initRes = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
-        body: JSON.stringify({
-          action: 'initialize',
-          email,
-          is_trial: true,
-          plan: selectedPlan,
-          organization_id: org.id
-        })
-      });
-
-      const initData = await initRes.json();
-      if (!initData.success) throw new Error(initData.error || 'Payment setup failed');
-
-      // Step 2: Load Paystack SDK on-demand (after window.onload — avoids CSS noise)
-      await loadPaystackInline();
-      setPaymentStep('card');
-      setIsLoading(false);
-
-      const reference = await new Promise((resolve, reject) => {
-        window.PaystackPop.setup({
-          key: config.PAYSTACK_PUBLIC_KEY,
-          email,
-          amount: initData.amount,
-          access_code: initData.access_code,
-          callback: (resp) => resolve(resp.reference),
-          onClose: () => reject(new Error('Payment cancelled'))
-        }).openIframe();
-      });
-
-      // Step 3: Verify payment and activate trial
-      setPaymentStep('processing');
-      setIsLoading(true);
-      await verifyAndComplete(reference, org.id);
-
-    } catch (err) {
-      console.error('Trial start error:', err);
-      setPaymentStep('card');
-      setIsLoading(false);
-      if (err.message === 'Payment cancelled') return;
-      if (err.message?.includes('already registered')) {
-        setError('This email is already registered. Please sign in instead.');
-      } else {
-        setError(err.message || 'Payment failed. Please try again.');
-      }
-    }
-  };
-
-  const verifyAndComplete = async (reference, orgId) => {
-    const response = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': config.SUPABASE_ANON_KEY },
-      body: JSON.stringify({
-        action: 'verify',
-        reference,
-        organization_id: orgId,
-        plan: selectedPlan,
-        is_trial: true
-      })
-    });
-    const data = await response.json();
-    if (data.success) {
-      setPaymentStep('success');
-      toast.success('14-day trial started! Welcome to TaxWise.');
-      // Immediately update the auth store so ProtectedRoute sees 'trial' status
-      const { user: su, organization: so, login: sl } = useAuthStore.getState();
-      sl(su, { ...so, subscription_status: 'trial' });
-      setTimeout(() => navigate('/dashboard'), 2500);
-    } else {
-      throw new Error(data.error || 'Verification failed');
-    }
+  const handlePaymentSuccess = () => {
+    setPaymentStep('success');
+    toast.success('14-day trial started! Welcome to TaxWise.');
+    const { user: su, organization: so, login: sl } = useAuthStore.getState();
+    sl(su, { ...so, subscription_status: 'trial' });
+    setTimeout(() => navigate('/dashboard'), 2500);
   };
 
   const stepLabels = ['Account', 'Business', 'Plan', 'Card'];
@@ -452,11 +366,6 @@ const RegisterPage = () => {
               {/* Card Form */}
               {paymentStep === 'card' && (
                 <>
-                  <div style={styles.secureNotice}>
-                    <Lock size={14} />
-                    <span>Secure payment powered by Paystack — accepts all major cards worldwide</span>
-                  </div>
-
                   {/* Trial summary */}
                   <div style={styles.trialSummary}>
                     <div style={styles.trialSummaryHeader}>
@@ -466,10 +375,6 @@ const RegisterPage = () => {
                     <div style={styles.trialSummaryRow}>
                       <span style={{ color: '#8B949E' }}>Selected Plan</span>
                       <span style={{ color: '#E6EDF3', fontWeight: 600 }}>{selectedPlanData?.name}</span>
-                    </div>
-                    <div style={styles.trialSummaryRow}>
-                      <span style={{ color: '#8B949E' }}>Trial Period</span>
-                      <span style={{ color: '#22C55E', fontWeight: 600 }}>14 days FREE</span>
                     </div>
                     <div style={styles.trialSummaryRow}>
                       <span style={{ color: '#8B949E' }}>After Trial</span>
@@ -482,30 +387,20 @@ const RegisterPage = () => {
                     </div>
                   </div>
 
-                  <p style={{ color: '#8B949E', fontSize: 13, margin: '0 0 16px', lineHeight: 1.5 }}>
-                    Click below to enter your card details securely via Paystack's checkout. A ₦100 verification charge will be applied and immediately refunded.
-                  </p>
+                  <PaymentForm
+                    email={email}
+                    amount={100}
+                    plan={selectedPlan}
+                    organizationId={createdOrg?.id}
+                    isTrial={true}
+                    onSuccess={handlePaymentSuccess}
+                    onError={(err) => setError(err.message)}
+                    buttonText="Start 14-Day Free Trial"
+                  />
 
-                  <div style={styles.btnRow}>
-                    <button type="button" onClick={handleBack} style={styles.secondaryBtn}>Back</button>
-                    <button
-                      type="button"
-                      onClick={handleStartTrial}
-                      disabled={isLoading}
-                      style={{ ...styles.primaryBtn, opacity: isLoading ? 0.7 : 1 }}
-                    >
-                      {isLoading ? (
-                        <><Loader size={18} className="spin" /><span>Verifying…</span></>
-                      ) : (
-                        <><Zap size={18} /><span>Start 14-Day Trial</span></>
-                      )}
-                    </button>
-                  </div>
-
-                  <p style={styles.disclaimer}>
-                    A ₦100 refundable card verification charge will be applied. Your subscription of{' '}
-                    ₦{selectedPlanData?.price.toLocaleString()}/month + VAT begins on day 15 unless you cancel.
-                  </p>
+                  <button type="button" onClick={handleBack} style={{ ...styles.secondaryBtn, marginTop: 8 }}>
+                    Back
+                  </button>
                 </>
               )}
             </div>

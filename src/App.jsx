@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 // Services
-import { getCurrentSession, getUserProfile, createUserProfile, onAuthStateChange, handleDeepLink } from './services/supabase';
+import { getCurrentSession, getUserProfile, createUserProfile, acceptInvitation, onAuthStateChange, handleDeepLink } from './services/supabase';
 import { loadOrganizationData, clearLocalData } from './services/dataSync';
 
 // Stores
@@ -135,6 +135,8 @@ function App() {
             first_name: nameParts[0] || '',
             last_name: nameParts.slice(1).join(' ') || ''
           });
+          // Mark the invitation as accepted in team_invitations
+          await acceptInvitation(session.user.email);
           // Re-fetch with organization join
           profile = await getUserProfile(userId);
         } else {
@@ -159,7 +161,12 @@ function App() {
           business_type: profile.organization.business_type,
           tin: profile.organization.tin,
           subscription_tier: profile.organization.subscription_tier,
-          subscription_status: profile.organization.subscription_status
+          subscription_status: profile.organization.subscription_status,
+          trial_ends_at: profile.organization.trial_ends_at,
+          card_last4: profile.organization.card_last4,
+          card_brand: profile.organization.card_brand,
+          card_exp_month: profile.organization.card_exp_month,
+          card_exp_year: profile.organization.card_exp_year
         } : null;
 
         login(user, organization);

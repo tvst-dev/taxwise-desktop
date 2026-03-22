@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   Users, Plus, Search, Mail, Shield, Edit2, Trash2,
-  MoreVertical, Crown, Check, X, AlertCircle, UserPlus,
-  Clock, RefreshCw, ChevronDown, Copy, ExternalLink
+  Crown, Check, X, AlertCircle, UserPlus,
+  Clock, RefreshCw, ChevronDown
 } from 'lucide-react';
 import { useTeamStore, useFeaturesStore, useAuthStore } from '../../store';
 import { inviteTeamMember, sendTeamInvite, cancelInvitation } from '../../services/supabase';
@@ -86,27 +86,18 @@ const Team = () => {
       return;
     }
 
-    // Check if already invited
-    const existingInvite = invitations.find(i => i.email === inviteForm.email);
+    // Check if already a member
     const existingMember = members.find(m => m.email === inviteForm.email);
-
-    if (existingInvite || existingMember) {
-      toast.error('This email has already been invited or is a member');
+    if (existingMember) {
+      toast.error('This email is already a team member');
       return;
     }
 
     const loadingToast = toast.loading(`Sending invitation to ${inviteForm.email}...`);
 
     try {
-      // Save invitation record to DB
-      const saved = await inviteTeamMember(
-        organization?.id,
-        inviteForm.email,
-        inviteForm.role,
-        user?.id
-      );
-
-      // Send the actual email via Edge Function
+      // Step 1 (critical): Send the Supabase auth invite email via Edge Function.
+      // The edge function handles 422 (stale pending invite) automatically.
       await sendTeamInvite(
         inviteForm.email,
         inviteForm.role,
@@ -115,21 +106,35 @@ const Team = () => {
         user?.name || user?.email
       );
 
-      addInvitation({ ...saved, name: inviteForm.name });
-      toast.success(`Invitation sent to ${inviteForm.email}`, { id: loadingToast });
-    } catch (e) {
-      console.warn('Invite error:', e.message);
-      // If email send failed but DB record succeeded, still show the invitation
-      // If DB also failed, add locally so the UI shows it
-      const alreadyAdded = invitations.find(i => i.email === inviteForm.email);
-      if (!alreadyAdded) {
-        addInvitation({ email: inviteForm.email, name: inviteForm.name, role: inviteForm.role });
+      // Step 2 (non-critical): Record in team_invitations table.
+      // Failure here does NOT block success — the email was already sent.
+      let saved = null;
+      try {
+        saved = await inviteTeamMember(
+          organization?.id,
+          inviteForm.email,
+          inviteForm.role,
+          user?.id
+        );
+      } catch (dbErr) {
+        console.warn('Could not save invite record to DB (non-critical):', dbErr.message);
       }
-      toast.error(`Could not send email: ${e.message}. Invite recorded — resend manually.`, { id: loadingToast });
-    }
 
-    setInviteForm({ email: '', name: '', role: 'accountant' });
-    setShowInviteModal(false);
+      addInvitation({
+        ...(saved || {}),
+        email: inviteForm.email,
+        name: inviteForm.name,
+        role: inviteForm.role,
+        status: 'pending'
+      });
+
+      toast.success(`Invitation sent to ${inviteForm.email}!`, { id: loadingToast });
+      setInviteForm({ email: '', name: '', role: 'accountant' });
+      setShowInviteModal(false);
+    } catch (e) {
+      console.error('Invite error:', e.message);
+      toast.error(`Failed to send invitation: ${e.message}`, { id: loadingToast });
+    }
   };
 
   const handleUpdateMember = () => {
@@ -183,9 +188,13 @@ const Team = () => {
   };
 
   const copyInviteLink = (invitation) => {
-    const link = `https://app.taxwise.ng/invite/${invitation.id}`;
+    // The accept-invite edge function is the canonical invite URL — it bridges
+    // Supabase auth tokens to the taxwise:// deep link after email confirmation.
+    // For manual sharing, we note that the recipient still needs to click "Send Invite"
+    // first to trigger Supabase to send them the auth email with the real token.
+    const link = `https://xgicdlwxjkqtarfytbgz.supabase.co/functions/v1/accept-invite`;
     navigator.clipboard.writeText(link);
-    toast.success('Invite link copied to clipboard');
+    toast('Resend the invite email to share the invite link — email contains the secure token');
   };
 
   // Feature disabled state
@@ -380,24 +389,17 @@ const Team = () => {
                   </span>
                 </div>
                 <div style={styles.memberActions}>
-                  <button 
-                    style={styles.actionButton}
-                    onClick={() => copyInviteLink(invitation)}
-                    title="Copy invite link"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <button 
-                    style={styles.actionButton}
+                  <button
+                    style={{ ...styles.actionButton, color: '#3B82F6' }}
                     onClick={() => handleResendInvite(invitation)}
-                    title="Resend"
+                    title="Resend invite email"
                   >
                     <RefreshCw size={14} />
                   </button>
-                  <button 
+                  <button
                     style={{ ...styles.actionButton, color: '#EF4444' }}
                     onClick={() => handleCancelInvite(invitation)}
-                    title="Cancel"
+                    title="Cancel invite"
                   >
                     <X size={14} />
                   </button>
