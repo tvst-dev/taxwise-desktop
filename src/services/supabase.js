@@ -14,6 +14,7 @@ const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY, {
   }
 });
 
+export { supabase };
 export const getSupabase = () => supabase;
 export const isSupabaseConnected = () => !!supabase;
 
@@ -23,7 +24,11 @@ export const signUp = async (email, password, metadata = {}) => {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: metadata }
+    options: {
+      data: metadata,
+      // Redirect confirmation emails to the Electron app, not localhost:3000
+      emailRedirectTo: 'taxwise://auth/callback'
+    }
   });
   if (error) throw error;
   return data;

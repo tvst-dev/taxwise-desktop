@@ -19,6 +19,8 @@ const TaxHistory = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedItems, setSelectedItems] = useState([]);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Tax types for filtering
   const taxTypes = [
@@ -115,15 +117,20 @@ const TaxHistory = () => {
     openModal('taxCalculator');
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this calculation?')) {
-      try {
-        await deleteTaxCalculation(id);
-      } catch (e) {
-        console.warn('DB delete failed, removing locally:', e.message);
-      }
+  const handleDelete = (id) => setConfirmDeleteId(id);
+
+  const handleDeleteConfirm = async () => {
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
+    setIsDeleting(true);
+    try {
+      await deleteTaxCalculation(id);
       removeCalculation(id);
       toast.success('Calculation deleted');
+    } catch (e) {
+      toast.error(`Delete failed: ${e.message}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -341,6 +348,21 @@ const TaxHistory = () => {
           </>
         )}
       </div>
+
+      {/* Inline delete confirmation */}
+      {confirmDeleteId && (
+        <div style={confirmStyles.overlay}>
+          <div style={confirmStyles.box}>
+            <p style={confirmStyles.text}>Delete this calculation? This cannot be undone.</p>
+            <div style={confirmStyles.actions}>
+              <button style={confirmStyles.cancel} onClick={() => setConfirmDeleteId(null)}>Cancel</button>
+              <button style={confirmStyles.confirm} onClick={handleDeleteConfirm} disabled={isDeleting}>
+                {isDeleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -574,6 +596,27 @@ const styles = {
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer'
+  }
+};
+
+const confirmStyles = {
+  overlay: {
+    position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000
+  },
+  box: {
+    background: '#161B22', border: '1px solid #30363D', borderRadius: 12,
+    padding: '24px 28px', width: 320
+  },
+  text: { color: '#E6EDF3', fontSize: 15, margin: '0 0 20px' },
+  actions: { display: 'flex', gap: 12 },
+  cancel: {
+    flex: 1, padding: '10px', background: 'transparent', border: '1px solid #30363D',
+    borderRadius: 8, color: '#8B949E', fontSize: 14, cursor: 'pointer'
+  },
+  confirm: {
+    flex: 1, padding: '10px', background: '#EF4444', border: 'none',
+    borderRadius: 8, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer'
   }
 };
 

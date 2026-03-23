@@ -7,10 +7,11 @@ import {
   FileText, RefreshCw, ExternalLink, Crown, Zap
 } from 'lucide-react';
 import PaymentForm from '../Payment/PaymentForm';
-import { 
-  useAuthStore, useSettingsStore, useFeaturesStore, 
-  useTeamStore, useUIStore 
+import {
+  useAuthStore, useSettingsStore, useFeaturesStore,
+  useTeamStore, useUIStore
 } from '../../store';
+import { sendTeamInvite, inviteTeamMember } from '../../services/supabase';
 import ToggleSwitch from '../common/ToggleSwitch';
 import toast from 'react-hot-toast';
 
@@ -103,17 +104,32 @@ const Settings = () => {
     toast.success('Organization updated successfully');
   };
 
-  const handleInviteMember = () => {
+  const handleInviteMember = async () => {
     if (!inviteForm.email) {
       toast.error('Please enter an email address');
       return;
     }
-    addInvitation({
-      email: inviteForm.email,
-      role: inviteForm.role
-    });
-    setInviteForm({ email: '', role: 'accountant' });
-    toast.success('Invitation sent successfully');
+    const loadingToast = toast.loading(`Sending invitation to ${inviteForm.email}...`);
+    try {
+      await sendTeamInvite(
+        inviteForm.email,
+        inviteForm.role,
+        organization?.id,
+        organization?.name,
+        user?.name || user?.email
+      );
+      let saved = null;
+      try {
+        saved = await inviteTeamMember(organization?.id, inviteForm.email, inviteForm.role, user?.id);
+      } catch (dbErr) {
+        console.warn('DB invite record failed (non-critical):', dbErr.message);
+      }
+      addInvitation({ ...(saved || {}), email: inviteForm.email, role: inviteForm.role, status: 'pending' });
+      toast.success(`Invitation sent to ${inviteForm.email}!`, { id: loadingToast });
+      setInviteForm({ email: '', role: 'accountant' });
+    } catch (e) {
+      toast.error(`Failed to send invitation: ${e.message}`, { id: loadingToast });
+    }
   };
 
   const handleToggleFeature = (feature, toggleFn, featureName) => {

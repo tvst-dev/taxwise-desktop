@@ -85,206 +85,75 @@ const SubscriptionModal = () => {
     return Object.keys(errors).length === 0;
   };
 
-  // Get session token
-  const getSessionToken = async () => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token;
-  };
-
-  // Handle card payment
+  // Open Paystack popup — works with all card types, no special approval needed
   const handlePayment = async () => {
-    if (!validateCard()) return;
-    if (!user?.email) {
-      toast.error('Email address required for billing');
-      return;
-    }
-
+    if (!user?.email) { toast.error('Email address required for billing'); return; }
     setIsProcessing(true);
-    const plan = SUBSCRIPTION_PLANS[selectedPlan];
-    const amount = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
-
     try {
-      const [expiryMonth, expiryYear] = card.expiry.split('/');
-      const token = await getSessionToken();
+      const PaystackPop = await new Promise((resolve, reject) => {
+        if (window.PaystackPop) { resolve(window.PaystackPop); return; }
+        const script = document.createElement('script');
+        script.src = 'https://js.paystack.co/v1/inline.js';
+        script.onload = () => resolve(window.PaystackPop);
+        script.onerror = () => reject(new Error('Failed to load Paystack'));
+        document.head.appendChild(script);
+      });
 
-      const response = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': config.SUPABASE_ANON_KEY,
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
-        body: JSON.stringify({
-          action: 'charge_card',
-          email: user.email,
-          amount: amount * 100, // kobo
-          plan: selectedPlan,
-          card: {
-            number: card.number.replace(/\s/g, ''),
-            cvv: card.cvv,
-            expiry_month: expiryMonth,
-            expiry_year: '20' + expiryYear
-          },
-          metadata: {
-            organization_id: organization.id,
-            user_id: user.id,
-            billing_cycle: billingCycle
+      const { supabase } = await import('../../services/supabase');
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const planData = SUBSCRIPTION_PLANS[selectedPlan];
+      const amount = billingCycle === 'annual' ? planData.annualPrice : planData.monthlyPrice;
+      const ref = `txw_sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      const handler = PaystackPop.setup({
+        key: config.PAYSTACK_PUBLIC_KEY,
+        email: user.email,
+        amount: amount * 100,
+        currency: 'NGN',
+        ref,
+        metadata: { organization_id: organization?.id, plan: selectedPlan, billing_cycle: billingCycle },
+        callback: async (response) => {
+          try {
+            const res = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': config.SUPABASE_ANON_KEY,
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+              },
+              body: JSON.stringify({
+                action: 'verify',
+                reference: response.reference,
+                organization_id: organization?.id,
+                plan: selectedPlan,
+                is_trial: false,
+              }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              setView('success');
+              toast.success('Subscription activated!');
+              await loadSubscription();
+            } else {
+              throw new Error(data.error || 'Verification failed');
+            }
+          } catch (err) {
+            toast.error(err.message);
+            setView('checkout');
+          } finally {
+            setIsProcessing(false);
           }
-        })
+        },
+        onClose: () => setIsProcessing(false),
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        setPaymentReference(data.reference);
-
-        if (data.status === 'success' || data.status === 'charge_attempted') {
-          await verifyAndComplete(data.reference);
-        } else if (data.status === 'send_otp' || data.status === 'send_pin') {
-          setView('otp');
-          toast.success(data.display_text || 'Enter the OTP sent to your phone');
-        } else if (data.status === '3ds_required') {
-          window.open(data.url, '_blank', 'width=500,height=600');
-          toast.success('Complete authentication in the popup');
-          pollForCompletion(data.reference);
-        } else {
-          throw new Error(data.message || 'Payment failed');
-        }
-      } else {
-        throw new Error(data.error || 'Payment failed');
-      }
+      handler.openIframe();
     } catch (error) {
-      console.error('Payment error:', error);
       toast.error(error.message || 'Payment failed. Please try again.');
-    } finally {
       setIsProcessing(false);
     }
-  };
-
-  // Submit OTP
-  const handleOtpSubmit = async () => {
-    if (!otpValue || otpValue.length < 4) {
-      toast.error('Please enter valid OTP');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const token = await getSessionToken();
-
-      const response = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': config.SUPABASE_ANON_KEY,
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
-        body: JSON.stringify({
-          action: 'submit_otp',
-          reference: paymentReference,
-          otp: otpValue
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.status && data.data?.status === 'success') {
-        await verifyAndComplete(paymentReference);
-      } else {
-        throw new Error(data.message || 'OTP verification failed');
-      }
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Verify payment and complete subscription
-  const verifyAndComplete = async (reference) => {
-    try {
-      const token = await getSessionToken();
-
-      const response = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': config.SUPABASE_ANON_KEY,
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
-        body: JSON.stringify({
-          action: 'verify',
-          reference,
-          organization_id: organization.id,
-          plan: selectedPlan,
-          is_trial: false
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setView('success');
-        toast.success('Subscription activated successfully!');
-        await loadSubscription();
-      } else {
-        throw new Error(data.error || 'Verification failed');
-      }
-    } catch (error) {
-      toast.error(error.message);
-      setView('checkout');
-    }
-  };
-
-  // Poll for 3DS completion
-  const pollForCompletion = async (reference) => {
-    let attempts = 0;
-    const maxAttempts = 60;
-
-    const poll = async () => {
-      attempts++;
-      if (attempts > maxAttempts) {
-        toast.error('Authentication timeout');
-        setView('checkout');
-        return;
-      }
-
-      try {
-        const token = await getSessionToken();
-
-        const response = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': config.SUPABASE_ANON_KEY,
-            ...(token && { 'Authorization': `Bearer ${token}` })
-          },
-          body: JSON.stringify({
-            action: 'verify',
-            reference,
-            organization_id: organization.id,
-            plan: selectedPlan,
-            is_trial: false
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          setView('success');
-          toast.success('Subscription activated!');
-          await loadSubscription();
-        } else {
-          setTimeout(poll, 5000);
-        }
-      } catch {
-        setTimeout(poll, 5000);
-      }
-    };
-
-    setTimeout(poll, 5000);
   };
 
   const handleUpdatePaymentMethod = async () => {
@@ -439,64 +308,16 @@ const SubscriptionModal = () => {
               </div>
             </div>
 
-            {/* Card Form */}
+            {/* Pay via Paystack popup */}
             <div style={styles.cardForm}>
               <div style={styles.secureNotice}>
                 <Lock size={14} />
-                <span>Secure payment - Your card details are encrypted</span>
+                <span>Secure payment powered by Paystack — PCI DSS compliant</span>
               </div>
 
-              {/* Card Number */}
-              <div style={styles.field}>
-                <label style={styles.label}>Card Number</label>
-                <div style={styles.inputWrapper}>
-                  <CreditCard size={18} style={styles.inputIcon} />
-                  <input
-                    type="text"
-                    value={card.number}
-                    onChange={(e) => setCard({ ...card, number: formatCardNumber(e.target.value) })}
-                    placeholder="1234 5678 9012 3456"
-                    style={{ ...styles.cardInput, ...(cardErrors.number && styles.inputError) }}
-                    maxLength={19}
-                  />
-                </div>
-                {cardErrors.number && <span style={styles.errorText}>{cardErrors.number}</span>}
-              </div>
-
-              {/* Expiry and CVV */}
-              <div style={styles.row}>
-                <div style={styles.field}>
-                  <label style={styles.label}>Expiry Date</label>
-                  <div style={styles.inputWrapper}>
-                    <Calendar size={18} style={styles.inputIcon} />
-                    <input
-                      type="text"
-                      value={card.expiry}
-                      onChange={(e) => setCard({ ...card, expiry: formatExpiry(e.target.value) })}
-                      placeholder="MM/YY"
-                      style={{ ...styles.cardInput, ...(cardErrors.expiry && styles.inputError) }}
-                      maxLength={5}
-                    />
-                  </div>
-                  {cardErrors.expiry && <span style={styles.errorText}>{cardErrors.expiry}</span>}
-                </div>
-
-                <div style={styles.field}>
-                  <label style={styles.label}>CVV</label>
-                  <div style={styles.inputWrapper}>
-                    <Lock size={18} style={styles.inputIcon} />
-                    <input
-                      type="password"
-                      value={card.cvv}
-                      onChange={(e) => setCard({ ...card, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                      placeholder="123"
-                      style={{ ...styles.cardInput, ...(cardErrors.cvv && styles.inputError) }}
-                      maxLength={4}
-                    />
-                  </div>
-                  {cardErrors.cvv && <span style={styles.errorText}>{cardErrors.cvv}</span>}
-                </div>
-              </div>
+              <p style={{ color: '#8B949E', fontSize: 14, margin: '12px 0 0' }}>
+                Click "Pay Now" to complete your payment securely through Paystack. You can use any card — Visa, Mastercard, Verve.
+              </p>
             </div>
 
             <div style={styles.disclaimer}>
