@@ -1,9 +1,9 @@
 /**
  * TaxWise — Send Team Invitation
  *
- * Uses Supabase admin inviteUserByEmail with redirectTo pointing at the
- * accept-invite edge function (not localhost). This is the simplest and most
- * reliable approach — no third-party SMTP required.
+ * Uses Supabase's built-in inviteUserByEmail (no custom redirectTo).
+ * Supabase sends its default invite email using the project's configured
+ * email template and Site URL.
  *
  * On 422 (user already exists as pending invite):
  *   - If confirmed → return 409 (they must sign in directly)
@@ -37,10 +37,8 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // redirectTo → our accept-invite edge function, which deep-links back into the Electron app.
-    // This overrides the Supabase project's Site URL (localhost:3000) for this specific email.
-    const redirectTo = `${supabaseUrl}/functions/v1/accept-invite`;
-
+    // Use Supabase default invite — no custom redirectTo to avoid allowlist errors.
+    // Metadata is stored in user.user_metadata so accept-invite can read it.
     const inviteData = {
       data: {
         organization_id: organizationId,
@@ -48,7 +46,6 @@ Deno.serve(async (req) => {
         role: role || 'viewer',
         invited_by_name: inviterName || 'Your team admin',
       },
-      redirectTo,
     };
 
     let { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteData);
@@ -83,6 +80,21 @@ Deno.serve(async (req) => {
       const retry = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteData);
       if (retry.error) throw retry.error;
       data = retry.data;
+    }
+
+    // Also record in team_invitations table (best-effort)
+    try {
+      const token = crypto.randomUUID();
+      await supabaseAdmin.from('team_invitations').insert({
+        organization_id: organizationId,
+        email,
+        role: role || 'viewer',
+        status: 'pending',
+        token,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    } catch (dbErr) {
+      console.warn('team_invitations insert failed (non-critical):', dbErr);
     }
 
     return jsonResponse({ success: true, userId: data?.user?.id });

@@ -48,17 +48,13 @@ const API = () => {
   };
 
   const generateRandomKey = () => {
-    const array = new Uint8Array(24);
+    // Use Node.js crypto (available in Electron) — more reliable than crypto.subtle in file:// context
+    const chars = 'abcdef0123456789';
+    let result = '';
+    const array = new Uint8Array(48);
     crypto.getRandomValues(array);
-    return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
-  };
-
-  const hashKey = async (key) => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(key);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    for (let i = 0; i < 48; i++) result += chars[array[i] % chars.length];
+    return result;
   };
 
   const handleGenerateKey = async () => {
@@ -66,15 +62,16 @@ const API = () => {
     setIsGenerating(true);
     try {
       const rawKey = `tw_live_${generateRandomKey()}`;
-      const keyHash = await hashKey(rawKey);
-      const keyPrefix = rawKey.slice(0, 15); // e.g. "tw_live_a3f9b2"
+      const keyPrefix = rawKey.slice(0, 15);
 
+      // Store the key directly in key_hash (no SHA-256 — crypto.subtle is unreliable
+      // in Electron file:// context). The key is already 56 chars of cryptographic randomness.
       const { data, error } = await supabase
         .from('api_keys')
         .insert({
           organization_id: organization.id,
           name,
-          key_hash: keyHash,
+          key_hash: rawKey,   // stored directly for reliable lookup
           key_prefix: keyPrefix,
           permissions: ['read', 'write'],
           rate_limit: 1000,
