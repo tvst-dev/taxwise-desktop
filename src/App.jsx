@@ -36,6 +36,7 @@ import Documents from './components/Documents/Documents';
 import API from './components/API/API';
 import Team from './components/Team/Team';
 import UpdateNotification from './components/UpdateNotification';
+import SetPasswordModal from './components/Auth/SetPasswordModal';
 
 // Protected Route — also enforces subscription gate
 const ProtectedRoute = ({ children }) => {
@@ -63,7 +64,8 @@ const PublicRoute = ({ children }) => {
 
 function App() {
   const [appReady, setAppReady] = useState(false);
-  const { login, logout, setLoading, isLoading } = useAuthStore();
+  const [showSetPasswordModal, setShowSetPasswordModal] = useState(false);
+  const { login, logout, setLoading, isLoading, user } = useAuthStore();
 
   useEffect(() => {
     let authSubscription = null;
@@ -94,8 +96,12 @@ function App() {
         if (window.electronAPI?.onDeepLink) {
           window.electronAPI.onDeepLink(async (url) => {
             try {
-              await handleDeepLink(url);
-              // onAuthStateChange above will handle the navigation
+              const result = await handleDeepLink(url);
+              // Invited users must set a password before using the app
+              if (result?.type === 'invite') {
+                setShowSetPasswordModal(true);
+              }
+              // onAuthStateChange above handles SIGNED_IN → loadUserData
             } catch (err) {
               console.error('Deep link handling failed:', err.message);
             }
@@ -280,6 +286,12 @@ function App() {
         }}
       />
       <UpdateNotification />
+      {showSetPasswordModal && (
+        <SetPasswordModal
+          userName={user?.name || user?.email}
+          onComplete={() => setShowSetPasswordModal(false)}
+        />
+      )}
     </div>
   );
 }

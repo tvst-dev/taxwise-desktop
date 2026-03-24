@@ -37,8 +37,12 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Use Supabase default invite — no custom redirectTo to avoid allowlist errors.
-    // Metadata is stored in user.user_metadata so accept-invite can read it.
+    // redirectTo must be in Supabase Dashboard → Auth → URL Configuration → Redirect URLs.
+    // taxwise://auth/callback is the Electron deep-link handler registered in main.js.
+    // After the user clicks the email link, Supabase verifies the token and redirects to:
+    //   taxwise://auth/callback#access_token=...&refresh_token=...&type=invite
+    // Electron catches this URL, sends it to the renderer via IPC, and the app calls
+    // supabase.auth.setSession() to sign the user in.
     const inviteData = {
       data: {
         organization_id: organizationId,
@@ -46,6 +50,7 @@ Deno.serve(async (req) => {
         role: role || 'viewer',
         invited_by_name: inviterName || 'Your team admin',
       },
+      redirectTo: 'taxwise://auth/callback',
     };
 
     let { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteData);
