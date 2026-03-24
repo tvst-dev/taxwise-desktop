@@ -11,7 +11,7 @@ import {
   useAuthStore, useSettingsStore, useFeaturesStore,
   useTeamStore, useUIStore
 } from '../../store';
-import { sendTeamInvite, inviteTeamMember } from '../../services/supabase';
+import { sendTeamInvite, inviteTeamMember, cancelInvitation } from '../../services/supabase';
 import ToggleSwitch from '../common/ToggleSwitch';
 import toast from 'react-hot-toast';
 
@@ -48,10 +48,12 @@ const Settings = () => {
   // Invite form state
   const [inviteForm, setInviteForm] = useState({
     email: '',
+    name: '',
     role: 'accountant'
   });
 
   const [isEditing, setIsEditing] = useState({});
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
@@ -124,11 +126,43 @@ const Settings = () => {
       } catch (dbErr) {
         console.warn('DB invite record failed (non-critical):', dbErr.message);
       }
-      addInvitation({ ...(saved || {}), email: inviteForm.email, role: inviteForm.role, status: 'pending' });
+      addInvitation({ ...(saved || {}), email: inviteForm.email, name: inviteForm.name, role: inviteForm.role, status: 'pending' });
       toast.success(`Invitation sent to ${inviteForm.email}!`, { id: loadingToast });
-      setInviteForm({ email: '', role: 'accountant' });
+      setInviteForm({ email: '', name: '', role: 'accountant' });
+      setShowInviteModal(false);
     } catch (e) {
       toast.error(`Failed to send invitation: ${e.message}`, { id: loadingToast });
+    }
+  };
+
+  const roleColors = {
+    admin: '#EF4444', manager: '#F59E0B', accountant: '#3B82F6',
+    cashier: '#22C55E', viewer: '#8B949E'
+  };
+
+  const handleResendInvite = async (invitation) => {
+    const loadingToast = toast.loading(`Resending to ${invitation.email}...`);
+    try {
+      await sendTeamInvite(
+        invitation.email, invitation.role,
+        organization?.id, organization?.name, user?.name || user?.email
+      );
+      toast.success(`Invitation resent to ${invitation.email}`, { id: loadingToast });
+    } catch (e) {
+      toast.error(`Resend failed: ${e.message}`, { id: loadingToast });
+    }
+  };
+
+  const handleCancelInvite = async (invitation) => {
+    try { await cancelInvitation(invitation.id); } catch (e) { console.warn('DB cancel:', e.message); }
+    removeInvitation(invitation.id);
+    toast.success('Invitation cancelled');
+  };
+
+  const handleRemoveMember = (member) => {
+    if (window.confirm(`Remove ${member.name || member.email} from the team?`)) {
+      removeMember(member.id);
+      toast.success('Member removed');
     }
   };
 
@@ -309,12 +343,13 @@ const Settings = () => {
         <div>
           <h3 style={styles.sectionTitle}>Team Members</h3>
           <p style={styles.sectionDescription}>
-            Manage who has access to your organization. 
-            <span style={styles.limitText}> ({members.length}/{featureLimits.maxUsers} users)</span>
+            Manage who has access to your organisation.
+            <span style={styles.limitText}> ({members.length + 1}/{featureLimits.maxUsers} seats used)</span>
           </p>
         </div>
         {multiUserEnabled && (
-          <button style={styles.addButton} onClick={() => setIsEditing({ ...isEditing, invite: true })}>
+          <button style={styles.addButton} onClick={() => setShowInviteModal(true)}
+            disabled={members.length >= featureLimits.maxUsers - 1}>
             <Plus size={16} />
             <span>Invite Member</span>
           </button>
@@ -326,108 +361,122 @@ const Settings = () => {
           <Users size={32} style={{ color: '#8B949E' }} />
           <div>
             <h4 style={styles.disabledTitle}>Multi-User Feature Disabled</h4>
-            <p style={styles.disabledText}>
-              Enable multi-user access in the Features tab to invite team members.
-            </p>
+            <p style={styles.disabledText}>Enable multi-user access in the Features tab to invite team members.</p>
           </div>
-          <button 
-            style={styles.enableButton}
-            onClick={() => setActiveTab('features')}
-          >
-            Enable Feature
-          </button>
+          <button style={styles.enableButton} onClick={() => setActiveTab('features')}>Enable Feature</button>
         </div>
       )}
 
-      {multiUserEnabled && isEditing.invite && (
-        <div style={styles.inviteCard}>
-          <h4 style={styles.inviteTitle}>Invite New Member</h4>
-          <div style={styles.inviteForm}>
-            <input
-              type="email"
-              value={inviteForm.email}
-              onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-              style={styles.input}
-              placeholder="Email address"
-            />
-            <select
-              value={inviteForm.role}
-              onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
-              style={styles.select}
-            >
-              {roles.map((role) => (
-                <option key={role.value} value={role.value}>{role.label}</option>
-              ))}
-            </select>
-            <div style={styles.inviteActions}>
-              <button style={styles.cancelButtonSmall} onClick={() => setIsEditing({ ...isEditing, invite: false })}>
-                Cancel
-              </button>
-              <button style={styles.saveButtonSmall} onClick={handleInviteMember}>
-                Send Invite
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Current User (Owner) */}
+      {/* Owner */}
       <div style={styles.memberCard}>
-        <div style={styles.memberAvatar}>
-          <span>{user?.name?.charAt(0) || 'U'}</span>
-        </div>
+        <div style={styles.memberAvatar}><span>{user?.name?.charAt(0) || 'U'}</span></div>
         <div style={styles.memberInfo}>
-          <span style={styles.memberName}>{user?.name || 'You'}</span>
+          <span style={styles.memberName}>{user?.name || 'Account Owner'}</span>
           <span style={styles.memberEmail}>{user?.email}</span>
         </div>
-        <span style={styles.ownerBadge}>
-          <Crown size={12} />
-          Owner
-        </span>
+        <span style={styles.ownerBadge}><Crown size={12} /> Owner</span>
       </div>
 
-      {/* Team Members */}
-      {members.map((member) => (
-        <div key={member.id} style={styles.memberCard}>
-          <div style={styles.memberAvatar}>
-            <span>{member.name?.charAt(0) || member.email?.charAt(0) || 'U'}</span>
+      {/* Active Members */}
+      {members.filter(m => m.id !== user?.id && m.email !== user?.email).map((member) => {
+        const color = roleColors[member.role] || '#8B949E';
+        return (
+          <div key={member.id} style={styles.memberCard}>
+            <div style={styles.memberAvatar}>
+              <span>{member.name?.charAt(0) || member.email?.charAt(0) || 'U'}</span>
+            </div>
+            <div style={styles.memberInfo}>
+              <span style={styles.memberName}>{member.name || member.email}</span>
+              <span style={styles.memberEmail}>{member.email}</span>
+            </div>
+            <span style={{ ...styles.roleBadge, backgroundColor: `${color}18`, color }}>
+              {member.role}
+            </span>
+            <span style={{ ...styles.pendingBadge, backgroundColor: 'rgba(34,197,94,0.1)', color: '#22C55E' }}>
+              Active
+            </span>
+            <button style={styles.deleteButton} onClick={() => handleRemoveMember(member)} title="Remove">
+              <Trash2 size={16} />
+            </button>
           </div>
-          <div style={styles.memberInfo}>
-            <span style={styles.memberName}>{member.name || member.email}</span>
-            <span style={styles.memberEmail}>{member.email}</span>
-          </div>
-          <span style={styles.roleBadge}>{member.role}</span>
-          <button 
-            style={styles.deleteButton}
-            onClick={() => removeMember(member.id)}
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Pending Invitations */}
       {invitations.length > 0 && (
         <>
-          <h4 style={styles.subsectionTitle}>Pending Invitations</h4>
-          {invitations.map((inv) => (
-            <div key={inv.id} style={{ ...styles.memberCard, opacity: 0.7 }}>
-              <div style={styles.memberAvatar}>
-                <Mail size={16} />
+          <h4 style={styles.subsectionTitle}>Pending Invitations ({invitations.length})</h4>
+          {invitations.map((inv) => {
+            const color = roleColors[inv.role] || '#8B949E';
+            return (
+              <div key={inv.id || inv.email} style={{ ...styles.memberCard, opacity: 0.85 }}>
+                <div style={{ ...styles.memberAvatar, backgroundColor: '#30363D' }}>
+                  <Mail size={16} color="#8B949E" />
+                </div>
+                <div style={styles.memberInfo}>
+                  <span style={styles.memberName}>{inv.name || inv.email}</span>
+                  <span style={styles.memberEmail}>{inv.email}</span>
+                </div>
+                <span style={{ ...styles.roleBadge, backgroundColor: `${color}18`, color }}>
+                  {inv.role}
+                </span>
+                <span style={styles.pendingBadge}>Pending</span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button style={{ ...styles.deleteButton, color: '#3B82F6' }}
+                    onClick={() => handleResendInvite(inv)} title="Resend email">
+                    <RefreshCw size={15} />
+                  </button>
+                  <button style={{ ...styles.deleteButton, color: '#EF4444' }}
+                    onClick={() => handleCancelInvite(inv)} title="Cancel invite">
+                    <X size={15} />
+                  </button>
+                </div>
               </div>
-              <div style={styles.memberInfo}>
-                <span style={styles.memberName}>{inv.email}</span>
-                <span style={styles.memberEmail}>Pending • {inv.role}</span>
+            );
+          })}
+        </>
+      )}
+
+      {/* Invite Modal */}
+      {showInviteModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowInviteModal(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Invite Team Member</h3>
+              <button style={styles.modalClose} onClick={() => setShowInviteModal(false)}><X size={20} /></button>
+            </div>
+            <div style={styles.modalBody}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Email Address *</label>
+                <input type="email" value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  style={styles.input} placeholder="colleague@company.com" autoFocus />
               </div>
-              <button 
-                style={styles.deleteButton}
-                onClick={() => removeInvitation(inv.id)}
-              >
-                <X size={16} />
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Full Name</label>
+                <input type="text" value={inviteForm.name}
+                  onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                  style={styles.input} placeholder="John Doe" />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Role *</label>
+                <select value={inviteForm.role}
+                  onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                  style={styles.select}>
+                  {roles.map((role) => (
+                    <option key={role.value} value={role.value}>{role.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div style={styles.modalFooter}>
+              <button style={styles.cancelButtonSmall} onClick={() => setShowInviteModal(false)}>Cancel</button>
+              <button style={styles.saveButtonSmall} onClick={handleInviteMember}>
+                <Mail size={15} /> Send Invitation
               </button>
             </div>
-          ))}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -969,23 +1018,29 @@ const styles = {
     display: 'flex',
     gap: '8px'
   },
-  cancelButtonSmall: {
-    padding: '10px 16px',
-    backgroundColor: 'transparent',
-    border: '1px solid #30363D',
-    borderRadius: '6px',
-    color: '#8B949E',
-    fontSize: '13px',
-    cursor: 'pointer'
-  },
   saveButtonSmall: {
-    padding: '10px 16px',
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '12px 16px',
     backgroundColor: '#2563EB',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: '8px',
     color: 'white',
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: '500',
+    cursor: 'pointer'
+  },
+  cancelButtonSmall: {
+    flex: 1,
+    padding: '12px',
+    backgroundColor: 'transparent',
+    border: '1px solid #30363D',
+    borderRadius: '8px',
+    color: '#8B949E',
+    fontSize: '14px',
     cursor: 'pointer'
   },
   memberCard: {
@@ -1060,6 +1115,52 @@ const styles = {
     fontWeight: '600',
     color: '#E6EDF3',
     margin: '24px 0 12px 0'
+  },
+  pendingBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 10px',
+    backgroundColor: 'rgba(245,158,11,0.1)',
+    borderRadius: '9999px',
+    fontSize: '12px',
+    fontWeight: '500',
+    color: '#F59E0B',
+    whiteSpace: 'nowrap'
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 9999
+  },
+  modal: {
+    width: '100%', maxWidth: '440px',
+    backgroundColor: '#161B22',
+    borderRadius: '16px',
+    border: '1px solid #30363D',
+    overflow: 'hidden'
+  },
+  modalHeader: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '20px 24px',
+    borderBottom: '1px solid #30363D'
+  },
+  modalTitle: {
+    fontSize: '18px', fontWeight: '600', color: '#E6EDF3', margin: 0
+  },
+  modalClose: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '32px', height: '32px',
+    backgroundColor: 'transparent', border: 'none',
+    color: '#8B949E', cursor: 'pointer', borderRadius: '6px'
+  },
+  modalBody: { padding: '24px' },
+  modalFooter: {
+    display: 'flex', gap: '12px',
+    padding: '20px 24px',
+    borderTop: '1px solid #30363D'
   },
   featuresList: {
     display: 'flex',

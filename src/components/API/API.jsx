@@ -1,17 +1,118 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Code, Key, Copy, Eye, EyeOff, RefreshCw,
-  Book, ExternalLink, Clock, CheckCircle, AlertCircle,
-  Terminal, Shield, Lock
+  CheckCircle, AlertCircle,
+  Terminal, Shield, Lock, Trash2, Plus
 } from 'lucide-react';
 import { useFeaturesStore, useAuthStore } from '../../store';
+import { supabase } from '../../services/supabase';
+import config from '../../config';
 import toast from 'react-hot-toast';
 
 const API = () => {
-  const { organization } = useAuthStore();
+  const { organization, user } = useAuthStore();
   const { apiAccessEnabled } = useFeaturesStore();
-  const [showApiKey, setShowApiKey] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [apiKeys, setApiKeys] = useState([]);
+  const [isLoadingKeys, setIsLoadingKeys] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [revealedKey, setRevealedKey] = useState(null); // { id, fullKey } — shown once after generation
+  const [showKeys, setShowKeys] = useState({});
+
+  useEffect(() => {
+    if (apiAccessEnabled && organization?.id) {
+      loadApiKeys();
+    }
+  }, [apiAccessEnabled, organization?.id]);
+
+  const loadApiKeys = async () => {
+    setIsLoadingKeys(true);
+    try {
+      const { data, error } = await supabase
+        .from('api_keys')
+        .select('id, name, key_prefix, permissions, rate_limit, is_active, last_used_at, created_at')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setApiKeys(data || []);
+    } catch (err) {
+      console.error('Failed to load API keys:', err.message);
+    } finally {
+      setIsLoadingKeys(false);
+    }
+  };
+
+  const generateRandomKey = () => {
+    const array = new Uint8Array(24);
+    crypto.getRandomValues(array);
+    return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const hashKey = async (key) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(key);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleGenerateKey = async () => {
+    const name = newKeyName.trim() || `Key ${new Date().toLocaleDateString()}`;
+    setIsGenerating(true);
+    try {
+      const rawKey = `tw_live_${generateRandomKey()}`;
+      const keyHash = await hashKey(rawKey);
+      const keyPrefix = rawKey.slice(0, 15); // e.g. "tw_live_a3f9b2"
+
+      const { data, error } = await supabase
+        .from('api_keys')
+        .insert({
+          organization_id: organization.id,
+          name,
+          key_hash: keyHash,
+          key_prefix: keyPrefix,
+          permissions: ['read', 'write'],
+          rate_limit: 1000,
+          created_by: user?.id || null,
+        })
+        .select('id, name, key_prefix, permissions, rate_limit, is_active, last_used_at, created_at')
+        .single();
+
+      if (error) throw error;
+
+      setApiKeys(prev => [data, ...prev]);
+      setRevealedKey({ id: data.id, fullKey: rawKey });
+      setNewKeyName('');
+      toast.success('API key generated — copy it now, it will not be shown again');
+    } catch (err) {
+      toast.error(`Failed to generate key: ${err.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRevokeKey = async (keyId) => {
+    try {
+      const { error } = await supabase
+        .from('api_keys')
+        .update({ is_active: false })
+        .eq('id', keyId)
+        .eq('organization_id', organization.id);
+      if (error) throw error;
+      setApiKeys(prev => prev.filter(k => k.id !== keyId));
+      if (revealedKey?.id === keyId) setRevealedKey(null);
+      toast.success('API key revoked');
+    } catch (err) {
+      toast.error(`Failed to revoke key: ${err.message}`);
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
+  };
 
   // Feature gate check
   if (!apiAccessEnabled) {
@@ -35,22 +136,16 @@ const API = () => {
     );
   }
 
-  // API configuration (placeholder - will be replaced with real keys from backend)
   const apiConfig = {
-    hasKeys: false, // Set to true when API keys are generated
-    liveKey: null,
-    testKey: null,
-    baseUrl: 'https://api.taxwise.ng',
+    baseUrl: `${config.SUPABASE_URL}/functions/v1`,
     version: 'v1'
   };
 
   const endpoints = [
-    { method: 'POST', path: '/v1/tax/calculate', description: 'Calculate tax liability for various tax types' },
-    { method: 'GET', path: '/v1/tax/rates', description: 'Get current Nigerian tax rates' },
-    { method: 'GET', path: '/v1/entries', description: 'List all financial entries' },
-    { method: 'POST', path: '/v1/entries', description: 'Create a new entry' },
-    { method: 'GET', path: '/v1/deductions', description: 'List eligible deductions' },
-    { method: 'GET', path: '/v1/analytics', description: 'Get financial analytics data' }
+    { method: 'POST', path: '/tax-calculate', description: 'Calculate tax liability (PAYE, CIT, VAT, WHT, CGT, EDT)' },
+    { method: 'POST', path: '/paystack', description: 'Process payments and verify transactions' },
+    { method: 'POST', path: '/send-invite', description: 'Send team member invitations' },
+    { method: 'GET',  path: '/accept-invite', description: 'Accept team invitation (redirect handler)' },
   ];
 
   const tabs = [
@@ -59,20 +154,15 @@ const API = () => {
     { id: 'examples', label: 'Code Examples' }
   ];
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard');
-  };
+  const baseUrl = `${config.SUPABASE_URL}/functions/v1`;
+  const anonKey = config.SUPABASE_ANON_KEY;
 
-  const handleGenerateKeys = () => {
-    toast('API key generation will be available once backend is connected');
-  };
-
-  const codeExample = `// Example: Calculate Company Income Tax
-const response = await fetch('https://api.taxwise.ng/v1/tax/calculate', {
+  const codeExample = `// Example: Calculate Company Income Tax (CIT)
+const response = await fetch('${baseUrl}/tax-calculate', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_KEY',
+    'apikey': '${anonKey}',
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -86,13 +176,14 @@ const response = await fetch('https://api.taxwise.ng/v1/tax/calculate', {
 });
 
 const result = await response.json();
-console.log(result.tax_payable);`;
+console.log(result.net_tax_payable);`;
 
   const vatExample = `// Example: Calculate VAT
-const response = await fetch('https://api.taxwise.ng/v1/tax/calculate', {
+const response = await fetch('${baseUrl}/tax-calculate', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_KEY',
+    'apikey': '${anonKey}',
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -114,19 +205,9 @@ console.log(result.vat_payable);`;
         <div>
           <h1 style={styles.title}>API Access</h1>
           <p style={styles.subtitle}>
-            Integrate TaxWise tax calculations into your applications
+            Integrate TaxWise calculations into your applications via Supabase edge functions
           </p>
         </div>
-        <a
-          href="https://docs.taxwise.ng/api"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={styles.docsBtn}
-        >
-          <Book size={16} />
-          Documentation
-          <ExternalLink size={14} />
-        </a>
       </div>
 
       {/* Tabs */}
@@ -148,78 +229,93 @@ console.log(result.vat_payable);`;
       {/* Overview Tab */}
       {activeTab === 'overview' && (
         <div style={styles.content}>
+          {/* Revealed-key banner (shown once after generation) */}
+          {revealedKey && (
+            <div style={styles.revealBanner}>
+              <AlertCircle size={16} color="#F59E0B" style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <span style={styles.revealTitle}>Save your key now — it won't be shown again</span>
+                <code style={styles.revealKey}>{revealedKey.fullKey}</code>
+              </div>
+              <button style={styles.iconBtn} onClick={() => copyToClipboard(revealedKey.fullKey)} title="Copy">
+                <Copy size={16} />
+              </button>
+              <button style={{ ...styles.iconBtn, color: '#EF4444' }} onClick={() => setRevealedKey(null)} title="Dismiss">
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* API Keys Section */}
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>API Keys</h2>
-            
-            {!apiConfig.hasKeys ? (
-              <div style={styles.noKeysCard}>
-                <div style={styles.noKeysIcon}>
-                  <Lock size={32} color="#8B949E" />
-                </div>
-                <h3 style={styles.noKeysTitle}>No API Keys Generated</h3>
-                <p style={styles.noKeysText}>
-                  Generate your API keys to start integrating TaxWise into your applications.
-                  Keep your keys secure and never expose them in client-side code.
-                </p>
-                <button style={styles.generateBtn} onClick={handleGenerateKeys}>
-                  <Key size={16} />
-                  Generate API Keys
+            <div style={styles.sectionRow}>
+              <h2 style={styles.sectionTitle}>API Keys</h2>
+              <div style={styles.generateRow}>
+                <input
+                  type="text"
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder="Key name (optional)"
+                  style={styles.keyNameInput}
+                  onKeyDown={(e) => e.key === 'Enter' && handleGenerateKey()}
+                />
+                <button style={styles.generateBtn} onClick={handleGenerateKey} disabled={isGenerating}>
+                  {isGenerating ? <RefreshCw size={16} className="spin" /> : <Plus size={16} />}
+                  {isGenerating ? 'Generating…' : 'Generate Key'}
                 </button>
+              </div>
+            </div>
+
+            {isLoadingKeys ? (
+              <div style={styles.loadingRow}>
+                <RefreshCw size={20} color="#8B949E" className="spin" />
+                <span style={{ color: '#8B949E', fontSize: 14 }}>Loading keys…</span>
+              </div>
+            ) : apiKeys.length === 0 ? (
+              <div style={styles.noKeysCard}>
+                <div style={styles.noKeysIcon}><Lock size={32} color="#8B949E" /></div>
+                <h3 style={styles.noKeysTitle}>No API Keys Yet</h3>
+                <p style={styles.noKeysText}>
+                  Generate an API key above to start integrating TaxWise into your backend applications.
+                  Keep keys secure — never expose them in client-side or browser code.
+                </p>
               </div>
             ) : (
               <div style={styles.keysGrid}>
-                <div style={styles.keyCard}>
-                  <div style={styles.keyHeader}>
-                    <span style={styles.keyLabel}>Live Key</span>
-                    <span style={styles.liveBadge}>Production</span>
-                  </div>
-                  <div style={styles.keyValue}>
-                    <code style={styles.keyCode}>
-                      {showApiKey ? apiConfig.liveKey : '•'.repeat(40)}
-                    </code>
-                    <div style={styles.keyActions}>
-                      <button
-                        style={styles.iconBtn}
-                        onClick={() => setShowApiKey(!showApiKey)}
-                      >
-                        {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                      <button
-                        style={styles.iconBtn}
-                        onClick={() => copyToClipboard(apiConfig.liveKey)}
-                      >
-                        <Copy size={16} />
-                      </button>
+                {apiKeys.map(k => (
+                  <div key={k.id} style={styles.keyCard}>
+                    <div style={styles.keyHeader}>
+                      <span style={styles.keyLabel}>{k.name}</span>
+                      <span style={styles.liveBadge}>Active</span>
+                    </div>
+                    <div style={styles.keyValue}>
+                      <code style={styles.keyCode}>
+                        {revealedKey?.id === k.id
+                          ? (showKeys[k.id] ? revealedKey.fullKey : revealedKey.fullKey.slice(0, 15) + '•'.repeat(20))
+                          : k.key_prefix + '•'.repeat(20)}
+                      </code>
+                      <div style={styles.keyActions}>
+                        {revealedKey?.id === k.id && (
+                          <button style={styles.iconBtn} onClick={() => copyToClipboard(revealedKey.fullKey)} title="Copy">
+                            <Copy size={16} />
+                          </button>
+                        )}
+                        <button
+                          style={{ ...styles.iconBtn, color: '#EF4444' }}
+                          onClick={() => handleRevokeKey(k.id)}
+                          title="Revoke"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    <div style={styles.keyMeta}>
+                      <span>Created {new Date(k.created_at).toLocaleDateString()}</span>
+                      {k.last_used_at && <span>Last used {new Date(k.last_used_at).toLocaleDateString()}</span>}
+                      <span>Rate limit: {k.rate_limit?.toLocaleString()}/day</span>
                     </div>
                   </div>
-                </div>
-
-                <div style={styles.keyCard}>
-                  <div style={styles.keyHeader}>
-                    <span style={styles.keyLabel}>Test Key</span>
-                    <span style={styles.testBadge}>Sandbox</span>
-                  </div>
-                  <div style={styles.keyValue}>
-                    <code style={styles.keyCode}>
-                      {showApiKey ? apiConfig.testKey : '•'.repeat(40)}
-                    </code>
-                    <div style={styles.keyActions}>
-                      <button
-                        style={styles.iconBtn}
-                        onClick={() => setShowApiKey(!showApiKey)}
-                      >
-                        {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                      <button
-                        style={styles.iconBtn}
-                        onClick={() => copyToClipboard(apiConfig.testKey)}
-                      >
-                        <Copy size={16} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
             )}
           </div>
@@ -327,6 +423,10 @@ console.log(result.vat_payable);`;
           </div>
         </div>
       )}
+    <style>{`
+      .spin { animation: spin 1s linear infinite; }
+      @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    `}</style>
     </div>
   );
 };
@@ -449,6 +549,69 @@ const styles = {
     color: '#E6EDF3',
     margin: '0 0 16px 0'
   },
+  sectionRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '16px',
+    flexWrap: 'wrap',
+    gap: '12px'
+  },
+  generateRow: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center'
+  },
+  keyNameInput: {
+    padding: '10px 14px',
+    backgroundColor: '#161B22',
+    border: '1px solid #30363D',
+    borderRadius: '8px',
+    color: '#E6EDF3',
+    fontSize: '14px',
+    outline: 'none',
+    width: '200px'
+  },
+  loadingRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '32px 0'
+  },
+  keyMeta: {
+    display: 'flex',
+    gap: '16px',
+    marginTop: '10px',
+    fontSize: '12px',
+    color: '#8B949E'
+  },
+  revealBanner: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '12px',
+    padding: '16px 20px',
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    border: '1px solid rgba(245, 158, 11, 0.3)',
+    borderRadius: '10px',
+    marginBottom: '24px'
+  },
+  revealTitle: {
+    display: 'block',
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#F59E0B',
+    marginBottom: '8px'
+  },
+  revealKey: {
+    display: 'block',
+    fontFamily: 'monospace',
+    fontSize: '13px',
+    color: '#E6EDF3',
+    wordBreak: 'break-all',
+    background: '#0D1117',
+    padding: '8px 12px',
+    borderRadius: '6px'
+  },
   noKeysCard: {
     textAlign: 'center',
     padding: '48px',
@@ -482,17 +645,18 @@ const styles = {
     lineHeight: '1.6'
   },
   generateBtn: {
-    display: 'inline-flex',
+    display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '12px 24px',
+    padding: '10px 20px',
     backgroundColor: '#2563EB',
     border: 'none',
     borderRadius: '8px',
     color: 'white',
     fontSize: '14px',
     fontWeight: '500',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    whiteSpace: 'nowrap'
   },
   keysGrid: {
     display: 'grid',

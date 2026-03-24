@@ -35,10 +35,11 @@ class ExportService {
   }
 
   /**
-   * Format currency for export
+   * Format currency for export (PDF-safe: uses NGN prefix since jsPDF's built-in
+   * Helvetica font does not include the ₦ glyph).
    */
   formatCurrency(amount) {
-    return `₦${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `NGN ${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   /**
@@ -213,9 +214,12 @@ class ExportService {
     doc.text(`Total records: ${entries.length}`, 14, 58);
 
     // ── Table ──
-    const tableData = entries.map((entry, index) => [
+    const tableData = entries.map((entry, index) => {
+      const rawId = entry.entry_id || entry.entryId || entry.id || '-';
+      const shortId = rawId.length > 13 ? rawId.slice(0, 13) + '…' : rawId;
+      return [
       index + 1,
-      entry.entry_id || entry.entryId || entry.id || '-',
+      shortId,
       this.formatDate(entry.date || entry.created_at),
       entry.description || '-',
       (entry.entry_type || entry.type || '-').toUpperCase(),
@@ -223,11 +227,12 @@ class ExportService {
       this.formatCurrency(parseFloat(entry.amount) || 0),
       entry.vat_amount ? this.formatCurrency(parseFloat(entry.vat_amount)) : '-',
       (entry.status || 'active').charAt(0).toUpperCase() + (entry.status || 'active').slice(1)
-    ]);
+      ];
+    });
 
     autoTable(doc, {
       startY: 64,
-      head: [['#', 'Entry ID', 'Date', 'Description', 'Type', 'Category', 'Amount (₦)', 'VAT (₦)', 'Status']],
+      head: [['#', 'Entry ID', 'Date', 'Description', 'Type', 'Category', 'Amount (NGN)', 'VAT (NGN)', 'Status']],
       body: tableData,
       theme: 'striped',
       headStyles: { fillColor: [22, 27, 34], textColor: 255, fontStyle: 'bold', fontSize: 8 },
@@ -268,13 +273,16 @@ class ExportService {
 
     const finalY = Math.min(doc.lastAutoTable.finalY + 10, doc.internal.pageSize.getHeight() - 40);
 
+    // ── Reset font state after autoTable (prevents character-spacing corruption) ──
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(30, 30, 30);
+    doc.setCharSpace(0);
+
     doc.setDrawColor(37, 99, 235);
     doc.setLineWidth(0.5);
     doc.line(14, finalY - 2, 283, finalY - 2);
 
-    doc.setTextColor(30, 30, 30);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
     doc.text(`Total Income:  ${this.formatCurrency(totalIncome)}`, 14, finalY + 5);
     doc.text(`Total Expense: ${this.formatCurrency(totalExpense)}`, 14, finalY + 12);
     if (totalVAT > 0) doc.text(`Total VAT:     ${this.formatCurrency(totalVAT)}`, 14, finalY + 19);
