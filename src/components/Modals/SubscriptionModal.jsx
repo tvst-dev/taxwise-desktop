@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X, CreditCard, Check, Zap, Shield, Lock,
+  X, CreditCard, Check, Lock,
   Calendar, RefreshCw, ChevronRight
 } from 'lucide-react';
 import { useUIStore, useAuthStore } from '../../store';
@@ -18,7 +18,6 @@ const SubscriptionModal = () => {
 
   const [currentSubscription, setCurrentSubscription] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState('sme');
-  const [billingCycle, setBillingCycle] = useState('monthly');
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [view, setView] = useState('plans'); // 'plans', 'checkout', 'otp', 'success'
@@ -111,7 +110,7 @@ const SubscriptionModal = () => {
     setIsProcessing(true);
     try {
       const planData = SUBSCRIPTION_PLANS[selectedPlan];
-      const amount = billingCycle === 'annual' ? planData.annualPrice : planData.monthlyPrice;
+      const amount = planData.monthlyPrice;
       const [expiryMonth, expiryYear] = card.expiry.split('/');
 
       const data = await paystackFetch({
@@ -232,15 +231,6 @@ const SubscriptionModal = () => {
     return `₦${amount.toLocaleString()}`;
   };
 
-  const calculateSavings = (planId) => {
-    const plan = SUBSCRIPTION_PLANS[planId];
-    const monthlyTotal = plan.monthlyPrice * 12;
-    const annualPrice = plan.annualPrice;
-    const savings = monthlyTotal - annualPrice;
-    const percentage = Math.round((savings / monthlyTotal) * 100);
-    return { savings, percentage };
-  };
-
   if (!isOpen) return null;
 
   const statusDisplay = currentSubscription
@@ -248,7 +238,7 @@ const SubscriptionModal = () => {
     : null;
 
   const selectedPlanData = SUBSCRIPTION_PLANS[selectedPlan];
-  const selectedAmount = billingCycle === 'annual' ? selectedPlanData.annualPrice : selectedPlanData.monthlyPrice;
+  const selectedAmount = selectedPlanData.monthlyPrice;
 
   return (
     <div style={styles.overlay} onClick={closeModal}>
@@ -333,28 +323,19 @@ const SubscriptionModal = () => {
 
               <div style={styles.summaryRow}>
                 <span>{selectedPlanData.name}</span>
-                <span>{formatPrice(selectedAmount)}</span>
+                <span>{formatPrice(selectedPlanData.monthlyPrice)}</span>
               </div>
 
               <div style={styles.summaryRow}>
                 <span>Billing Cycle</span>
-                <span>{billingCycle === 'annual' ? 'Annual' : 'Monthly'}</span>
+                <span>Monthly</span>
               </div>
-
-              {billingCycle === 'annual' && (
-                <div style={styles.savingsRow}>
-                  <Zap size={16} />
-                  <span>You save {formatPrice(calculateSavings(selectedPlan).savings)}/year</span>
-                </div>
-              )}
 
               <div style={styles.totalRow}>
                 <span>Total</span>
                 <span style={styles.totalAmount}>
-                  {formatPrice(selectedAmount)}
-                  <span style={styles.billingPeriod}>
-                    /{billingCycle === 'annual' ? 'year' : 'month'}
-                  </span>
+                  {formatPrice(selectedPlanData.monthlyPrice)}
+                  <span style={styles.billingPeriod}>/month</span>
                 </span>
               </div>
             </div>
@@ -504,29 +485,6 @@ const SubscriptionModal = () => {
               </div>
             )}
 
-            {/* Billing Cycle Toggle */}
-            <div style={styles.billingToggle}>
-              <button
-                style={{
-                  ...styles.toggleButton,
-                  ...(billingCycle === 'monthly' ? styles.toggleButtonActive : {})
-                }}
-                onClick={() => setBillingCycle('monthly')}
-              >
-                Monthly
-              </button>
-              <button
-                style={{
-                  ...styles.toggleButton,
-                  ...(billingCycle === 'annual' ? styles.toggleButtonActive : {})
-                }}
-                onClick={() => setBillingCycle('annual')}
-              >
-                Annual
-                <span style={styles.saveBadge}>Save 17%</span>
-              </button>
-            </div>
-
             {/* Plans */}
             <div style={styles.plansGrid}>
               {Object.values(SUBSCRIPTION_PLANS).map((plan) => (
@@ -538,7 +496,7 @@ const SubscriptionModal = () => {
                   }}
                   onClick={() => setSelectedPlan(plan.id)}
                 >
-                  {plan.id === 'enterprise' && (
+                  {plan.id === 'sme' && (
                     <div style={styles.popularBadge}>Most Popular</div>
                   )}
 
@@ -546,19 +504,10 @@ const SubscriptionModal = () => {
                     <h3 style={styles.planName}>{plan.name}</h3>
                     <div style={styles.planPrice}>
                       <span style={styles.priceAmount}>
-                        {formatPrice(
-                          billingCycle === 'annual'
-                            ? Math.round(plan.annualPrice / 12)
-                            : plan.monthlyPrice
-                        )}
+                        {formatPrice(plan.monthlyPrice)}
                       </span>
                       <span style={styles.pricePeriod}>/month</span>
                     </div>
-                    {billingCycle === 'annual' && (
-                      <div style={styles.billedAnnually}>
-                        Billed annually ({formatPrice(plan.annualPrice)})
-                      </div>
-                    )}
                   </div>
 
                   <ul style={styles.featureList}>
@@ -774,40 +723,6 @@ const styles = {
     fontSize: '13px',
     cursor: 'pointer'
   },
-  billingToggle: {
-    display: 'flex',
-    gap: '4px',
-    padding: '4px',
-    backgroundColor: '#0D1117',
-    borderRadius: '10px',
-    marginBottom: '24px'
-  },
-  toggleButton: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    padding: '12px',
-    backgroundColor: 'transparent',
-    border: 'none',
-    borderRadius: '8px',
-    color: '#8B949E',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer'
-  },
-  toggleButtonActive: {
-    backgroundColor: '#21262D',
-    color: '#E6EDF3'
-  },
-  saveBadge: {
-    padding: '2px 8px',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    borderRadius: '4px',
-    fontSize: '11px',
-    color: '#22C55E'
-  },
   plansGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
@@ -859,11 +774,6 @@ const styles = {
   pricePeriod: {
     fontSize: '14px',
     color: '#8B949E'
-  },
-  billedAnnually: {
-    fontSize: '12px',
-    color: '#8B949E',
-    marginTop: '4px'
   },
   featureList: {
     listStyle: 'none',
@@ -925,17 +835,6 @@ const styles = {
     fontSize: '14px',
     color: '#8B949E',
     marginBottom: '12px'
-  },
-  savingsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '12px',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    borderRadius: '8px',
-    fontSize: '13px',
-    color: '#22C55E',
-    marginBottom: '16px'
   },
   totalRow: {
     display: 'flex',

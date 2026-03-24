@@ -123,12 +123,15 @@ const TaxHistory = () => {
     const id = confirmDeleteId;
     setConfirmDeleteId(null);
     setIsDeleting(true);
+    // Optimistic: remove from UI immediately so the user sees instant feedback
+    removeCalculation(id);
     try {
       await deleteTaxCalculation(id);
-      removeCalculation(id);
       toast.success('Calculation deleted');
     } catch (e) {
-      toast.error(`Delete failed: ${e.message}`);
+      // DB delete failed — item removed locally but will reappear on next sync
+      console.error('DB delete failed:', e.message);
+      toast.error(`Removed locally. Server error: ${e.message}`);
     } finally {
       setIsDeleting(false);
     }

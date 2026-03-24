@@ -88,18 +88,29 @@ const ExportModal = () => {
           });
           await exportService.downloadExcel(wb, `TaxWise-${title.replace(/ /g, '-')}-${today}.xlsx`);
         } else {
-          const csv = generateCSV(
+          const csvMeta = [
+            `"App","TaxWise Nigeria"`,
+            `"Company","${orgData.name || 'N/A'}"`,
+            `"TIN","${orgData.tin || 'N/A'}"`,
+            `"Report","${title}"`,
+            `"Period","${dateRange.start} to ${dateRange.end}"`,
+            `"Generated","${today}"`,
+            `"Total Records","${filtered.length}"`,
+            ``
+          ].join('\n');
+          const csv = csvMeta + generateCSV(
             filtered.map((e, i) => [
               i + 1,
-              e.entry_id || e.id || '',
-              e.date || '',
+              e.entry_id || e.entryId || (e.id ? e.id : ''),
+              e.date || e.created_at || '',
               e.description || '',
-              (e.entry_type || '').toUpperCase(),
-              e.amount || 0,
+              (e.entry_type || e.type || '').toUpperCase(),
               e.category || '',
-              e.status || ''
+              parseFloat(e.amount) || 0,
+              parseFloat(e.vat_amount) || 0,
+              e.status || 'active'
             ]),
-            ['#', 'ID', 'Date', 'Description', 'Type', 'Amount (NGN)', 'Category', 'Status']
+            ['#', 'Entry ID', 'Date', 'Description', 'Type', 'Category', 'Amount (NGN)', 'VAT (NGN)', 'Status']
           );
           downloadText(csv, `TaxWise-Transactions-${today}.csv`);
         }
@@ -136,14 +147,30 @@ const ExportModal = () => {
           });
           await exportService.downloadExcel(wb, `TaxWise-Tax-Calculations-${today}.xlsx`);
         } else {
-          const csv = generateCSV(
+          const csvMeta = [
+            `"App","TaxWise Nigeria"`,
+            `"Company","${orgData.name || 'N/A'}"`,
+            `"TIN","${orgData.tin || 'N/A'}"`,
+            `"Report","Tax Calculations Report"`,
+            `"Period","${dateRange.start} to ${dateRange.end}"`,
+            `"Generated","${today}"`,
+            `"Total Records","${filtered.length}"`,
+            ``
+          ].join('\n');
+          const csv = csvMeta + generateCSV(
             filtered.map((c, i) => [
-              i + 1, c.id || '', c.created_at || c.createdAt || '',
-              getTaxTypeName(c.tax_type), c.fiscal_year || '',
-              c.net_tax_payable || 0, c.taxable_amount || 0,
+              i + 1,
+              c.id || '',
+              c.created_at || c.createdAt || '',
+              getTaxTypeName(c.tax_type),
+              (c.tax_type || '').toUpperCase(),
+              c.fiscal_year || '',
+              c.taxable_amount || c.taxable_income || c.gross_amount || 0,
+              c.net_tax_payable || 0,
+              c.gross_tax || 0,
               c.status || 'draft'
             ]),
-            ['#', 'ID', 'Date', 'Tax Type', 'Fiscal Year', 'Tax Payable (NGN)', 'Taxable Amount (NGN)', 'Status']
+            ['#', 'Calculation ID', 'Date', 'Tax Type Name', 'Tax Type Code', 'Fiscal Year', 'Taxable Amount (NGN)', 'Net Tax Payable (NGN)', 'Gross Tax (NGN)', 'Status']
           );
           downloadText(csv, `TaxWise-Tax-Calculations-${today}.csv`);
         }
