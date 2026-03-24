@@ -19,6 +19,9 @@ const API = () => {
   const [newKeyName, setNewKeyName] = useState('');
   const [revealedKey, setRevealedKey] = useState(null); // { id, fullKey } — shown once after generation
   const [showKeys, setShowKeys] = useState({});
+  const [testKeyInput, setTestKeyInput] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null); // null | { valid, ...} | { error }
 
   useEffect(() => {
     if (apiAccessEnabled && organization?.id) {
@@ -106,6 +109,28 @@ const API = () => {
       toast.success('API key revoked');
     } catch (err) {
       toast.error(`Failed to revoke key: ${err.message}`);
+    }
+  };
+
+  const handleTestKey = async () => {
+    const key = testKeyInput.trim();
+    if (!key) { toast.error('Enter a key to test'); return; }
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`${config.SUPABASE_URL}/functions/v1/verify-api-key`, {
+        method: 'GET',
+        headers: {
+          'apikey': config.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${key}`,
+        },
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (err) {
+      setTestResult({ error: err.message || 'Request failed' });
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -316,6 +341,53 @@ console.log(result.vat_payable);`;
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Test Key */}
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>Test a Key</h2>
+            <div style={styles.testRow}>
+              <input
+                type="text"
+                value={testKeyInput}
+                onChange={(e) => { setTestKeyInput(e.target.value); setTestResult(null); }}
+                placeholder="tw_live_..."
+                style={{ ...styles.keyNameInput, flex: 1 }}
+                onKeyDown={(e) => e.key === 'Enter' && handleTestKey()}
+              />
+              <button style={styles.generateBtn} onClick={handleTestKey} disabled={isTesting}>
+                {isTesting ? <RefreshCw size={16} className="spin" /> : <CheckCircle size={16} />}
+                {isTesting ? 'Testing…' : 'Verify Key'}
+              </button>
+            </div>
+            {testResult && (
+              <div style={{
+                ...styles.testResultBox,
+                borderColor: testResult.valid ? '#22C55E' : '#EF4444',
+                backgroundColor: testResult.valid ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+              }}>
+                {testResult.valid ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <CheckCircle size={18} color="#22C55E" />
+                      <span style={{ color: '#22C55E', fontWeight: 600 }}>Key is valid and active</span>
+                    </div>
+                    <div style={styles.testResultGrid}>
+                      <span style={styles.testLabel}>Key Name</span><span style={styles.testValue}>{testResult.key_name}</span>
+                      <span style={styles.testLabel}>Organisation</span><span style={styles.testValue}>{testResult.organization?.name || testResult.organization?.id}</span>
+                      <span style={styles.testLabel}>Plan</span><span style={styles.testValue}>{testResult.organization?.plan || '—'}</span>
+                      <span style={styles.testLabel}>Permissions</span><span style={styles.testValue}>{(testResult.permissions || []).join(', ')}</span>
+                      <span style={styles.testLabel}>Rate Limit</span><span style={styles.testValue}>{testResult.rate_limit?.toLocaleString()} req/day</span>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertCircle size={18} color="#EF4444" />
+                    <span style={{ color: '#EF4444', fontWeight: 600 }}>{testResult.error || 'Key verification failed'}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -833,6 +905,32 @@ const styles = {
     color: '#8B949E',
     fontSize: '12px',
     cursor: 'pointer'
+  },
+  testRow: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    marginBottom: '12px'
+  },
+  testResultBox: {
+    padding: '16px 20px',
+    border: '1px solid',
+    borderRadius: '10px',
+    marginTop: '8px'
+  },
+  testResultGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'max-content 1fr',
+    gap: '6px 20px',
+    fontSize: '13px'
+  },
+  testLabel: {
+    color: '#8B949E',
+    fontWeight: 500
+  },
+  testValue: {
+    color: '#E6EDF3',
+    fontFamily: 'monospace'
   },
   codeBlock: {
     margin: 0,

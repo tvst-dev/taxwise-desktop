@@ -340,22 +340,16 @@ export const cancelInvitation = async (invitationId) => {
 };
 
 export const sendTeamInvite = async (email, role, organizationId, organizationName, inviterName) => {
-  // Route through the send-invite edge function which has the service role key
-  // and handles 422 (stale pending invites) by deleting + re-inviting automatically.
-  // Always refresh the session first to avoid expired-token "Invalid JWT" errors.
-  await supabase.auth.refreshSession().catch(() => {});
-  const { data: { session } } = await supabase.auth.getSession();
-
-  // Supabase edge function gateway requires a valid Bearer token.
-  // If the user session is unavailable, fall back to the anon key (itself a valid JWT).
-  const bearerToken = session?.access_token || config.SUPABASE_ANON_KEY;
-
+  // send-invite uses the SERVICE_ROLE_KEY internally and does not need user-level auth.
+  // Always use the anon key as the Bearer token — it is a long-lived (2036) valid JWT
+  // signed by this project and never expires the way user access tokens do.
+  // Using the user's access_token caused "Invalid JWT" when the session was stale.
   const response = await fetch(`${config.SUPABASE_URL}/functions/v1/send-invite`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'apikey': config.SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${bearerToken}`,
+      'Authorization': `Bearer ${config.SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify({ email, role, organizationId, organizationName, inviterName }),
   });
