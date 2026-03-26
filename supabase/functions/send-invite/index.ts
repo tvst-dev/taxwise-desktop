@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     const webAcceptUrl = 'https://taxwise.com.ng';
 
     // Generate the invite link (does NOT send an email — we send it ourselves)
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    let { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'invite',
       email,
       options: {
@@ -64,17 +64,55 @@ Deno.serve(async (req) => {
     });
 
     if (linkError) {
-      // 422 means user already registered and confirmed
-      if (
+      const isAlreadyRegistered =
         linkError.status === 422 ||
-        (linkError.message || '').toLowerCase().includes('already registered')
-      ) {
-        return jsonResponse(
-          { error: 'This email already has an active TaxWise account. Ask them to sign in directly.' },
-          409
-        );
+        (linkError.message || '').toLowerCase().includes('already registered');
+
+      if (isAlreadyRegistered) {
+        // Check whether the existing user is confirmed (real account) or unconfirmed (expired invite).
+        // For unconfirmed users: delete them so we can re-invite cleanly.
+        try {
+          const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+          const existing = listData?.users?.find(
+            (u: { email?: string; email_confirmed_at?: string | null; id: string }) =>
+              u.email?.toLowerCase() === email.toLowerCase()
+          );
+
+          if (existing && !existing.email_confirmed_at) {
+            // Unconfirmed — previous invite link expired. Delete and re-invite.
+            await supabaseAdmin.auth.admin.deleteUser(existing.id);
+
+            // Retry generateLink now that the user record is gone
+            const { data: retryData, error: retryError } = await supabaseAdmin.auth.admin.generateLink({
+              type: 'invite',
+              email,
+              options: {
+                redirectTo: webAcceptUrl,
+                data: {
+                  organization_id:   organizationId,
+                  organization_name: organizationName || 'TaxWise',
+                  role:              role || 'viewer',
+                  invited_by_name:   inviterName || 'Your team admin',
+                },
+              },
+            });
+            if (retryError) throw retryError;
+            linkData = retryData;
+          } else {
+            // Confirmed user — they have an active account
+            return jsonResponse(
+              { error: 'This email already has an active TaxWise account. Ask them to sign in directly.' },
+              409
+            );
+          }
+        } catch (checkErr: unknown) {
+          const e = checkErr as Error & { status?: number };
+          if (e.status === 409) throw checkErr; // re-throw our own 409
+          throw linkError; // fall back to original error
+        }
+      } else {
+        throw linkError;
       }
-      throw linkError;
     }
 
     const inviteLink = linkData?.properties?.action_link;

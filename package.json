@@ -1,6 +1,6 @@
 {
   "name": "taxwise-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TaxWise - Nigerian Tax Management & Compliance System",
   "main": "main.js",
   "scripts": {
