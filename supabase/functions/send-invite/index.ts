@@ -1,13 +1,17 @@
 /**
  * TaxWise — Send Team Invitation
  *
- * Uses Supabase's built-in inviteUserByEmail (no custom redirectTo).
- * Supabase sends its default invite email using the project's configured
- * email template and Site URL.
+ * Uses supabase.auth.admin.generateLink({ type: 'invite' }) to create a
+ * signed invite URL, then sends it via Resend (RESEND_API_KEY env var).
  *
- * On 422 (user already exists as pending invite):
- *   - If confirmed → return 409 (they must sign in directly)
- *   - If unconfirmed → delete stale pending user and re-invite
+ * If RESEND_API_KEY is not set, the invite link is returned to the caller
+ * so the admin can share it manually — the invite still works, just no email.
+ *
+ * Required Supabase secrets (supabase secrets set ...):
+ *   RESEND_API_KEY  — from resend.com (free tier: 100 emails/day)
+ *
+ * Supabase Dashboard → Auth → URL Configuration → Redirect URLs must include:
+ *   https://taxwise-auth.vercel.app/auth/accept-invite
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -28,8 +32,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'email and organizationId are required' }, 400);
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseUrl    = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
+    const resendApiKey   = Deno.env.get('RESEND_API_KEY');
 
     if (!serviceRoleKey) {
       return jsonResponse({ error: 'Service role key not configured' }, 500);
@@ -37,80 +42,193 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // redirectTo must be in Supabase Dashboard → Auth → URL Configuration → Redirect URLs.
-    // taxwise://auth/callback is the Electron deep-link handler registered in main.js.
-    // After the user clicks the email link, Supabase verifies the token and redirects to:
-    //   taxwise://auth/callback#access_token=...&refresh_token=...&type=invite
-    // Electron catches this URL, sends it to the renderer via IPC, and the app calls
-    // supabase.auth.setSession() to sign the user in.
-    const inviteData = {
-      data: {
-        organization_id: organizationId,
-        organization_name: organizationName || 'TaxWise',
-        role: role || 'viewer',
-        invited_by_name: inviterName || 'Your team admin',
+    // Accept-invite web page — Supabase verifies token, redirects here with #access_token=...
+    // This URL must be in Supabase Dashboard → Auth → URL Configuration → Redirect URLs
+    const webAcceptUrl = 'https://taxwise-auth.vercel.app/auth/accept-invite';
+
+    // Generate the invite link (does NOT send an email — we send it ourselves)
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'invite',
+      email,
+      options: {
+        redirectTo: webAcceptUrl,
+        data: {
+          organization_id:    organizationId,
+          organization_name:  organizationName || 'TaxWise',
+          role:               role || 'viewer',
+          invited_by_name:    inviterName || 'Your team admin',
+        },
       },
-      redirectTo: 'taxwise://auth/callback',
-    };
+    });
 
-    let { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteData);
-
-    if (error) {
-      const is422 =
-        error.status === 422 ||
-        (error.message || '').toLowerCase().includes('already') ||
-        (error.message || '').toLowerCase().includes('registered');
-
-      if (!is422) throw error;
-
-      // User already exists — check confirmed vs pending
-      const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const existing = listData?.users?.find(
-        (u) => u.email?.toLowerCase() === email.toLowerCase()
-      );
-
-      if (!existing) throw error;
-
-      if (existing.email_confirmed_at) {
+    if (linkError) {
+      // 422 means user already registered and confirmed
+      if (
+        linkError.status === 422 ||
+        (linkError.message || '').toLowerCase().includes('already registered')
+      ) {
         return jsonResponse(
           { error: 'This email already has an active TaxWise account. Ask them to sign in directly.' },
           409
         );
       }
-
-      // Stale pending invite — delete and re-invite fresh
-      const { error: deleteErr } = await supabaseAdmin.auth.admin.deleteUser(existing.id);
-      if (deleteErr) throw deleteErr;
-
-      const retry = await supabaseAdmin.auth.admin.inviteUserByEmail(email, inviteData);
-      if (retry.error) throw retry.error;
-      data = retry.data;
+      throw linkError;
     }
 
-    // Also record in team_invitations table (best-effort)
+    const inviteLink = linkData?.properties?.action_link;
+    if (!inviteLink) throw new Error('Failed to generate invite link');
+
+    // Record invite in DB (best-effort)
     try {
-      const token = crypto.randomUUID();
-      await supabaseAdmin.from('team_invitations').insert({
-        organization_id: organizationId,
-        email,
-        role: role || 'viewer',
-        status: 'pending',
-        token,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      });
+      await supabaseAdmin.from('team_invitations').upsert(
+        {
+          organization_id: organizationId,
+          email,
+          role:       role || 'viewer',
+          status:     'pending',
+          token:      crypto.randomUUID(),
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+        { onConflict: 'organization_id,email', ignoreDuplicates: false }
+      );
     } catch (dbErr) {
-      console.warn('team_invitations insert failed (non-critical):', dbErr);
+      console.warn('team_invitations upsert failed (non-critical):', dbErr);
     }
 
-    return jsonResponse({ success: true, userId: data?.user?.id });
+    // Send email via Resend
+    let emailSent = false;
+    if (resendApiKey) {
+      try {
+        const emailHtml = buildInviteEmail({
+          inviteLink,
+          organizationName: organizationName || 'TaxWise',
+          inviterName:      inviterName || 'Your team admin',
+          role:             role || 'viewer',
+          email,
+        });
+
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from:    'TaxWise <noreply@taxwise.com.ng>',
+            to:      [email],
+            subject: `You're invited to join ${organizationName || 'TaxWise'}`,
+            html:    emailHtml,
+          }),
+        });
+
+        if (res.ok) {
+          emailSent = true;
+        } else {
+          const errBody = await res.json().catch(() => ({}));
+          console.warn('Resend error:', errBody);
+        }
+      } catch (emailErr) {
+        console.warn('Email send failed (non-critical):', emailErr);
+      }
+    }
+
+    return jsonResponse({
+      success:    true,
+      userId:     linkData?.user?.id,
+      email_sent: emailSent,
+      // Return invite link so admin can share it manually if email wasn't sent
+      invite_link: emailSent ? undefined : inviteLink,
+    });
+
   } catch (err) {
     console.error('send-invite error:', err);
-    return jsonResponse(
-      { error: (err as Error).message || 'Failed to send invitation' },
-      400
-    );
+    return jsonResponse({ error: (err as Error).message || 'Failed to send invitation' }, 400);
   }
 });
+
+// ─── Email template ────────────────────────────────────────────────────────
+function buildInviteEmail({
+  inviteLink, organizationName, inviterName, role, email,
+}: {
+  inviteLink: string;
+  organizationName: string;
+  inviterName: string;
+  role: string;
+  email: string;
+}) {
+  const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#060A14;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#060A14;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#0D1117;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+
+        <!-- Header -->
+        <tr>
+          <td style="padding:32px 40px 24px;border-bottom:1px solid rgba(255,255,255,0.07);">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:linear-gradient(135deg,#3B82F6,#8B5CF6);border-radius:10px;width:40px;height:40px;text-align:center;vertical-align:middle;">
+                  <span style="color:#fff;font-size:20px;font-weight:700;line-height:40px;">T</span>
+                </td>
+                <td style="padding-left:12px;color:#E2E8F0;font-size:20px;font-weight:700;">TaxWise</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px 40px;">
+            <h1 style="margin:0 0 8px;color:#E2E8F0;font-size:22px;font-weight:700;">You're invited!</h1>
+            <p style="margin:0 0 24px;color:#94A3B8;font-size:15px;line-height:1.6;">
+              <strong style="color:#E2E8F0;">${inviterName}</strong> has invited you to join
+              <strong style="color:#E2E8F0;">${organizationName}</strong> on TaxWise as a
+              <span style="background:rgba(59,130,246,0.15);color:#60A5FA;padding:2px 8px;border-radius:4px;font-size:13px;">${roleLabel}</span>.
+            </p>
+
+            <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
+              <tr>
+                <td align="center">
+                  <a href="${inviteLink}"
+                     style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;font-size:15px;font-weight:600;text-decoration:none;border-radius:10px;">
+                    Accept Invitation
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 8px;color:#64748B;font-size:13px;line-height:1.6;">
+              Or copy and paste this link into your browser:
+            </p>
+            <p style="margin:0 0 24px;word-break:break-all;">
+              <a href="${inviteLink}" style="color:#3B82F6;font-size:12px;">${inviteLink}</a>
+            </p>
+
+            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:0 0 24px;" />
+            <p style="margin:0;color:#475569;font-size:12px;line-height:1.6;">
+              This invitation was sent to <strong>${email}</strong>. It expires in 7 days.
+              If you didn't expect this, you can safely ignore this email.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid rgba(255,255,255,0.05);">
+            <p style="margin:0;color:#334155;font-size:12px;">TaxWise · Nigerian Tax Management Software</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {

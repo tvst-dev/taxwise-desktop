@@ -54,6 +54,7 @@ const Settings = () => {
 
   const [isEditing, setIsEditing] = useState({});
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [pendingInviteLink, setPendingInviteLink] = useState(null);
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
@@ -113,7 +114,7 @@ const Settings = () => {
     }
     const loadingToast = toast.loading(`Sending invitation to ${inviteForm.email}...`);
     try {
-      await sendTeamInvite(
+      const result = await sendTeamInvite(
         inviteForm.email,
         inviteForm.role,
         organization?.id,
@@ -127,9 +128,17 @@ const Settings = () => {
         console.warn('DB invite record failed (non-critical):', dbErr.message);
       }
       addInvitation({ ...(saved || {}), email: inviteForm.email, name: inviteForm.name, role: inviteForm.role, status: 'pending' });
-      toast.success(`Invitation sent to ${inviteForm.email}!`, { id: loadingToast });
+      const emailCopy = inviteForm.email;
       setInviteForm({ email: '', name: '', role: 'accountant' });
       setShowInviteModal(false);
+      if (result?.email_sent) {
+        toast.success(`Invitation email sent to ${emailCopy}!`, { id: loadingToast });
+      } else if (result?.invite_link) {
+        toast.dismiss(loadingToast);
+        setPendingInviteLink({ email: emailCopy, link: result.invite_link });
+      } else {
+        toast.success(`Invitation created for ${emailCopy}!`, { id: loadingToast });
+      }
     } catch (e) {
       toast.error(`Failed to send invitation: ${e.message}`, { id: loadingToast });
     }
@@ -474,6 +483,48 @@ const Settings = () => {
               <button style={styles.saveButtonSmall} onClick={handleInviteMember}>
                 <Mail size={15} /> Send Invitation
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Link Modal */}
+      {pendingInviteLink && (
+        <div style={styles.modalOverlay} onClick={() => setPendingInviteLink(null)}>
+          <div style={{ ...styles.modal, maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Share Invite Link</h3>
+              <button style={styles.modalClose} onClick={() => setPendingInviteLink(null)}><X size={20} /></button>
+            </div>
+            <div style={styles.modalBody}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                borderRadius: 8, padding: '10px 14px' }}>
+                <AlertCircle size={16} color="#F59E0B" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: '#FCD34D', lineHeight: 1.5 }}>
+                  Email delivery is not configured. Share this link directly with <strong>{pendingInviteLink.email}</strong>.
+                </span>
+              </div>
+              <p style={{ fontSize: 13, color: '#8B949E', marginBottom: 10 }}>Invite link (expires in 7 days):</p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input readOnly value={pendingInviteLink.link}
+                  style={{ flex: 1, padding: '10px 12px', background: '#0D1117', border: '1px solid #30363D',
+                    borderRadius: 8, color: '#E6EDF3', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                <button style={styles.saveButtonSmall}
+                  onClick={() => { navigator.clipboard.writeText(pendingInviteLink.link); toast.success('Copied!'); }}>
+                  Copy
+                </button>
+              </div>
+              <p style={{ marginTop: 12, fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+                Add <strong>RESEND_API_KEY</strong> to Supabase Edge Function secrets to enable automatic email delivery.
+              </p>
+            </div>
+            <div style={styles.modalFooter}>
+              <button style={styles.cancelButtonSmall} onClick={() => setPendingInviteLink(null)}>Close</button>
+              <a href={`mailto:${pendingInviteLink.email}?subject=You're invited to TaxWise&body=Click this link to accept your invitation: ${encodeURIComponent(pendingInviteLink.link)}`}
+                style={{ ...styles.saveButtonSmall, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Mail size={15} /> Open Email Client
+              </a>
             </div>
           </div>
         </div>

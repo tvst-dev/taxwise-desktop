@@ -115,11 +115,14 @@ const API = () => {
     setIsTesting(true);
     setTestResult(null);
     try {
+      // Supabase gateway validates Authorization as a JWT — pass anon key there.
+      // Pass the TaxWise API key separately via X-Api-Key so the gateway lets it through.
       const res = await fetch(`${config.SUPABASE_URL}/functions/v1/verify-api-key`, {
         method: 'GET',
         headers: {
           'apikey': config.SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${key}`,
+          'Authorization': `Bearer ${config.SUPABASE_ANON_KEY}`,
+          'X-Api-Key': key,
         },
       });
       const data = await res.json();

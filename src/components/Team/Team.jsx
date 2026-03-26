@@ -20,6 +20,7 @@ const Team = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
+  const [pendingInviteLink, setPendingInviteLink] = useState(null); // { email, link }
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [inviteForm, setInviteForm] = useState({
@@ -96,9 +97,8 @@ const Team = () => {
     const loadingToast = toast.loading(`Sending invitation to ${inviteForm.email}...`);
 
     try {
-      // Step 1 (critical): Send the Supabase auth invite email via Edge Function.
-      // The edge function handles 422 (stale pending invite) automatically.
-      await sendTeamInvite(
+      // Send invite via Edge Function — generates invite link + sends email if Resend is configured
+      const result = await sendTeamInvite(
         inviteForm.email,
         inviteForm.role,
         organization?.id,
@@ -106,8 +106,7 @@ const Team = () => {
         user?.name || user?.email
       );
 
-      // Step 2 (non-critical): Record in team_invitations table.
-      // Failure here does NOT block success — the email was already sent.
+      // Record in team_invitations table (non-critical)
       let saved = null;
       try {
         saved = await inviteTeamMember(
@@ -128,9 +127,19 @@ const Team = () => {
         status: 'pending'
       });
 
-      toast.success(`Invitation sent to ${inviteForm.email}!`, { id: loadingToast });
+      const emailCopy = inviteForm.email;
       setInviteForm({ email: '', name: '', role: 'accountant' });
       setShowInviteModal(false);
+
+      if (result?.email_sent) {
+        toast.success(`Invitation email sent to ${emailCopy}!`, { id: loadingToast });
+      } else if (result?.invite_link) {
+        // Email service not configured — show the link so admin can share it manually
+        toast.dismiss(loadingToast);
+        setPendingInviteLink({ email: emailCopy, link: result.invite_link });
+      } else {
+        toast.success(`Invitation created for ${emailCopy}!`, { id: loadingToast });
+      }
     } catch (e) {
       console.error('Invite error:', e.message);
       toast.error(`Failed to send invitation: ${e.message}`, { id: loadingToast });
@@ -541,6 +550,68 @@ const Team = () => {
                 <Check size={16} />
                 Save Changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Link Modal — shown when email service isn't configured */}
+      {pendingInviteLink && (
+        <div style={styles.modalOverlay} onClick={() => setPendingInviteLink(null)}>
+          <div style={{ ...styles.modal, maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Share Invite Link</h3>
+              <button style={styles.modalClose} onClick={() => setPendingInviteLink(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                borderRadius: 8, padding: '10px 14px' }}>
+                <AlertCircle size={16} color="#F59E0B" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: '#FCD34D', lineHeight: 1.5 }}>
+                  Email delivery is not configured. Share this link directly with <strong>{pendingInviteLink.email}</strong>.
+                </span>
+              </div>
+              <p style={{ fontSize: 13, color: '#8B949E', marginBottom: 10 }}>
+                Invite link (expires in 7 days):
+              </p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  readOnly
+                  value={pendingInviteLink.link}
+                  style={{ flex: 1, padding: '10px 12px', background: '#0D1117', border: '1px solid #30363D',
+                    borderRadius: 8, color: '#E6EDF3', fontSize: 12, fontFamily: 'monospace',
+                    outline: 'none', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                />
+                <button
+                  style={{ ...styles.submitButton, padding: '10px 16px', gap: 6, flexShrink: 0 }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(pendingInviteLink.link);
+                    toast.success('Invite link copied!');
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
+              <p style={{ marginTop: 12, fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>
+                To enable automatic email delivery, add a <strong>RESEND_API_KEY</strong> to your
+                Supabase project secrets (Supabase Dashboard → Edge Functions → Secrets).
+              </p>
+            </div>
+            <div style={styles.modalFooter}>
+              <button style={styles.cancelButton} onClick={() => setPendingInviteLink(null)}>
+                Close
+              </button>
+              <a
+                href={`mailto:${pendingInviteLink.email}?subject=You're invited to TaxWise&body=Click this link to accept your invitation: ${encodeURIComponent(pendingInviteLink.link)}`}
+                style={{ ...styles.submitButton, textDecoration: 'none', display: 'inline-flex',
+                  alignItems: 'center', gap: 6 }}
+              >
+                <Mail size={16} />
+                Open in Email Client
+              </a>
             </div>
           </div>
         </div>

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accept Invitation — TaxWise</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #060A14;
+      color: #E2E8F0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 20px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+    .logo {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 24px;
+      font-size: 26px; font-weight: 700; color: #fff;
+    }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .sub { font-size: 14px; color: #94A3B8; margin-bottom: 32px; line-height: 1.6; }
+    .org-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3);
+      color: #60A5FA; border-radius: 20px;
+      padding: 4px 14px; font-size: 13px; font-weight: 500;
+      margin-bottom: 24px;
+    }
+    .field { text-align: left; margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 500; color: #94A3B8; margin-bottom: 6px; }
+    input {
+      width: 100%; padding: 12px 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      color: #E2E8F0; font-size: 15px; font-family: inherit;
+      outline: none; transition: border-color .2s;
+    }
+    input:focus { border-color: #3B82F6; }
+    .strength { height: 3px; border-radius: 2px; margin-top: 6px; background: rgba(255,255,255,0.07); overflow: hidden; }
+    .strength-bar { height: 100%; border-radius: 2px; transition: width .3s, background .3s; }
+    .hint { font-size: 11px; color: #64748B; margin-top: 4px; }
+    .btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #3B82F6, #2563EB);
+      border: none; border-radius: 10px;
+      color: #fff; font-size: 15px; font-weight: 600; font-family: inherit;
+      cursor: pointer; margin-top: 8px;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn:hover { opacity: .9; }
+    .btn:active { transform: scale(.99); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .msg {
+      margin-top: 20px; padding: 14px 18px;
+      border-radius: 10px; font-size: 14px; line-height: 1.5;
+      display: none;
+    }
+    .msg.error { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: #F87171; }
+    .msg.success { background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3); color: #34D399; }
+    .msg.info { background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.3); color: #60A5FA; }
+    .divider { margin: 28px 0; border: none; border-top: 1px solid rgba(255,255,255,0.07); }
+    .dl-section { font-size: 13px; color: #64748B; }
+    .dl-link {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 8px 16px; color: #94A3B8; text-decoration: none;
+      font-size: 13px; font-weight: 500; transition: background .2s;
+    }
+    .dl-link:hover { background: rgba(255,255,255,0.09); color: #E2E8F0; }
+    #step-loading, #step-form, #step-done, #step-error { display: none; }
+    .spinner {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,.1);
+      border-top-color: #3B82F6;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .check-icon {
+      width: 60px; height: 60px; border-radius: 50%;
+      background: rgba(16,185,129,.12); border: 2px solid rgba(16,185,129,.4);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px; font-size: 28px;
+    }
+    .err-icon {
+      width: 60px; height: 60px; border-radius: 50%;
+      background: rgba(239,68,68,.1); border: 2px solid rgba(239,68,68,.3);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px; font-size: 28px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">T</div>
+
+  <!-- Loading state -->
+  <div id="step-loading">
+    <div class="spinner"></div>
+    <p style="color:#94A3B8;font-size:14px">Verifying your invitation…</p>
+  </div>
+
+  <!-- Set password form -->
+  <div id="step-form">
+    <h1>You're invited!</h1>
+    <p class="sub" id="invite-sub">Set a password to activate your TaxWise account.</p>
+    <div class="org-badge" id="org-badge" style="display:none">🏢 <span id="org-name"></span></div>
+
+    <div class="field">
+      <label for="pw">New password</label>
+      <input type="password" id="pw" placeholder="At least 8 characters" autocomplete="new-password" />
+      <div class="strength"><div class="strength-bar" id="strength-bar"></div></div>
+      <p class="hint" id="strength-hint"></p>
+    </div>
+    <div class="field">
+      <label for="pw2">Confirm password</label>
+      <input type="password" id="pw2" placeholder="Repeat your password" autocomplete="new-password" />
+    </div>
+
+    <button class="btn" id="submit-btn" onclick="handleSubmit()">Activate account</button>
+    <div class="msg" id="form-msg"></div>
+
+    <hr class="divider" />
+    <div class="dl-section">
+      Don't have TaxWise installed?
+      <br/>
+      <a class="dl-link" href="https://github.com/tvst-dev/taxwise-desktop/releases/latest" target="_blank">
+        ⬇ Download TaxWise for Windows
+      </a>
+    </div>
+  </div>
+
+  <!-- Success state -->
+  <div id="step-done">
+    <div class="check-icon">✓</div>
+    <h1>All set!</h1>
+    <p class="sub" id="done-sub">Opening TaxWise… if it doesn't open automatically, launch the app and sign in.</p>
+    <div class="msg info" id="done-msg" style="display:block">
+      Redirecting to the TaxWise app…
+    </div>
+  </div>
+
+  <!-- Error state -->
+  <div id="step-error">
+    <div class="err-icon">✕</div>
+    <h1>Link expired</h1>
+    <p class="sub" id="error-sub">This invite link has expired or already been used. Ask your admin to resend the invitation.</p>
+    <div class="msg error" id="error-msg" style="display:block;margin-top:0">
+      If you already set your password, just open TaxWise and sign in normally.
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── Configuration ────────────────────────────────────────────────────────
+  const SUPABASE_URL  = 'https://xgicdlwxjkqtarfytbgz.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnaWNkbHd4amtxdGFyZnl0Ymd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNzU0NzcsImV4cCI6MjA4NTk1MTQ3N30.tDNwtvRXLA5-BSJgQnsiOFAw2XFK7vBXaOLL5qh3GlU';
+
+  const { createClient } = supabase; // from CDN global
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  let sessionTokens = null; // { access_token, refresh_token, type }
+
+  // ─── Show/hide steps ──────────────────────────────────────────────────────
+  function show(id) {
+    ['step-loading','step-form','step-done','step-error'].forEach(s => {
+      document.getElementById(s).style.display = s === id ? 'block' : 'none';
+    });
+  }
+
+  // ─── Password strength ────────────────────────────────────────────────────
+  document.getElementById('pw').addEventListener('input', function() {
+    const v = this.value;
+    let score = 0;
+    if (v.length >= 8)  score++;
+    if (v.length >= 12) score++;
+    if (/[A-Z]/.test(v)) score++;
+    if (/[0-9]/.test(v)) score++;
+    if (/[^A-Za-z0-9]/.test(v)) score++;
+    const colors = ['#EF4444','#F59E0B','#F59E0B','#22C55E','#22C55E','#10B981'];
+    const labels = ['','Weak','Fair','Good','Strong','Very strong'];
+    const bar = document.getElementById('strength-bar');
+    bar.style.width = (score * 20) + '%';
+    bar.style.background = colors[score] || '#EF4444';
+    document.getElementById('strength-hint').textContent = labels[score] || '';
+  });
+
+  // ─── Init ─────────────────────────────────────────────────────────────────
+  async function init() {
+    show('step-loading');
+
+    // Supabase puts tokens in the URL hash after verifying the invite link
+    const hash = window.location.hash.slice(1);
+    const params = new URLSearchParams(hash);
+    const access_token  = params.get('access_token');
+    const refresh_token = params.get('refresh_token');
+    const type          = params.get('type'); // 'invite' | 'recovery'
+
+    if (!access_token || !refresh_token) {
+      show('step-error');
+      document.getElementById('error-sub').textContent =
+        'No invite tokens found. This link may be invalid or expired.';
+      return;
+    }
+
+    try {
+      // Establish a session so we can call updateUser later
+      const { data, error } = await sb.auth.setSession({ access_token, refresh_token });
+      if (error) throw error;
+
+      sessionTokens = { access_token, refresh_token, type };
+
+      // Show org name if present in user metadata
+      const meta = data.session?.user?.user_metadata || {};
+      if (meta.organization_name) {
+        document.getElementById('org-name').textContent = meta.organization_name;
+        document.getElementById('org-badge').style.display = 'inline-flex';
+      }
+      if (meta.invited_by_name) {
+        document.getElementById('invite-sub').textContent =
+          `${meta.invited_by_name} invited you to join ${meta.organization_name || 'TaxWise'}. Set a password to get started.`;
+      }
+
+      show('step-form');
+    } catch (err) {
+      console.error('Session error:', err);
+      show('step-error');
+      document.getElementById('error-sub').textContent =
+        err.message || 'This invitation link is invalid or has expired.';
+    }
+  }
+
+  // ─── Submit ───────────────────────────────────────────────────────────────
+  async function handleSubmit() {
+    const pw  = document.getElementById('pw').value;
+    const pw2 = document.getElementById('pw2').value;
+    const msg = document.getElementById('form-msg');
+
+    const showMsg = (text, type) => {
+      msg.textContent = text;
+      msg.className = 'msg ' + type;
+      msg.style.display = 'block';
+    };
+
+    if (pw.length < 8) { showMsg('Password must be at least 8 characters.', 'error'); return; }
+    if (pw !== pw2)    { showMsg('Passwords do not match.', 'error'); return; }
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Activating…';
+    msg.style.display = 'none';
+
+    try {
+      // Set the password for the invited user
+      const { error } = await sb.auth.updateUser({ password: pw });
+      if (error) throw error;
+
+      // Get fresh tokens after password update
+      const { data: { session } } = await sb.auth.getSession();
+      const at = session?.access_token  || sessionTokens.access_token;
+      const rt = session?.refresh_token || sessionTokens.refresh_token;
+
+      // Deep-link into the Electron app
+      const deepLink = `taxwise://auth/callback#access_token=${at}&refresh_token=${rt}&type=invite`;
+
+      show('step-done');
+
+      // Try to open the Electron app via custom protocol
+      setTimeout(() => {
+        window.location.href = deepLink;
+      }, 800);
+
+    } catch (err) {
+      console.error('Password update error:', err);
+      btn.disabled = false;
+      btn.textContent = 'Activate account';
+      showMsg(err.message || 'Failed to set password. Please try again.', 'error');
+    }
+  }
+
+  // ─── Keyboard shortcut ────────────────────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const form = document.getElementById('step-form');
+      if (form.style.display !== 'none') handleSubmit();
+    }
+  });
+
+  init();
+</script>
+</body>
+</html>
