@@ -8,6 +8,7 @@
   <meta property="og:description" content="Automate your Nigerian tax compliance. PAYE, VAT, WHT, CIT calculations, AI document scanning, and team management — all in one desktop app." />
   <meta property="og:type" content="website" />
   <title>TaxWise — Nigerian Tax Management Software</title>
+  <link rel="icon" href="/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -94,12 +95,13 @@
     }
     .nav-logo-icon {
       width: 38px; height: 38px;
-      background: linear-gradient(135deg, var(--blue-dk) 0%, var(--purple) 100%);
       border-radius: 10px;
+      overflow: hidden;
       display: flex; align-items: center; justify-content: center;
-      font-size: 17px; font-weight: 900; color: #fff;
       box-shadow: 0 4px 14px var(--blue-glow);
+      background: #fff;
     }
+    .nav-logo-icon img { width: 38px; height: 38px; object-fit: cover; }
     .nav-logo-name { font-size: 19px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
     .nav-links { display: flex; align-items: center; gap: 30px; list-style: none; }
     .nav-links a {
@@ -598,10 +600,11 @@
     .foot-brand { display: flex; align-items: center; gap: 10px; }
     .foot-logo {
       width: 30px; height: 30px; border-radius: 7px;
-      background: linear-gradient(135deg, var(--blue-dk), var(--purple));
+      background: #fff;
       display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 900; color: #fff;
+      overflow: hidden;
     }
+    .foot-logo img { width: 30px; height: 30px; object-fit: cover; }
     .foot-name { font-size: 14px; font-weight: 700; color: var(--text); }
     .foot-copy { font-size: 12px; color: var(--dim); margin-top: 2px; }
     .foot-links { display: flex; gap: 22px; }
@@ -622,11 +625,12 @@
     }
     .a-logo-icon {
       width: 48px; height: 48px; border-radius: 12px;
-      background: linear-gradient(135deg, var(--blue-dk), var(--purple));
+      background: #fff;
       display: flex; align-items: center; justify-content: center;
-      font-size: 22px; font-weight: 900; color: #fff;
+      overflow: hidden;
       box-shadow: 0 4px 18px var(--blue-glow);
     }
+    .a-logo-icon img { width: 48px; height: 48px; object-fit: cover; }
     .a-logo-name { font-size: 24px; font-weight: 800; color: var(--text); }
     .a-logo-sub  { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .a-card {
@@ -750,7 +754,7 @@
   <nav id="navbar">
     <div class="nav-inner">
       <a href="#" class="nav-logo">
-        <div class="nav-logo-icon">₦</div>
+        <div class="nav-logo-icon"><img src="/favicon.png" alt="TaxWise" /></div>
         <span class="nav-logo-name">TaxWise</span>
       </a>
       <ul class="nav-links">
@@ -1121,7 +1125,7 @@
     <div class="container">
       <div class="foot-inner">
         <div class="foot-brand">
-          <div class="foot-logo">₦</div>
+          <div class="foot-logo"><img src="/favicon.png" alt="TaxWise" /></div>
           <div>
             <div class="foot-name">TaxWise</div>
             <div class="foot-copy">© 2025 TaxWise · Nigerian Tax Management &amp; Compliance System</div>
@@ -1152,7 +1156,7 @@
 
   // EXE is hosted in Supabase Storage → bucket: "downloads" → file: "TaxWise-Setup.exe"
   // Upload steps: Supabase Dashboard → Storage → New bucket "downloads" (Public) → Upload EXE renamed to "TaxWise-Setup.exe"
-  const DOWNLOAD_URL = 'https://xgicdlwxjkqtarfytbgz.supabase.co/storage/v1/object/public/downloads/TaxWise-Setup.exe';
+  const DOWNLOAD_URL = 'https://github.com/tvst-dev/taxwise-desktop/releases/download/v1.0.0/TaxWise.Setup.1.0.0.exe';
 
   /* ─────────────────────────────────────────────
      SUPABASE INIT
@@ -1363,7 +1367,7 @@
   function authLogo() {
     return `
       <a href="/" class="a-logo">
-        <div class="a-logo-icon">₦</div>
+        <div class="a-logo-icon"><img src="/favicon.png" alt="TaxWise" /></div>
         <div>
           <div class="a-logo-name">TaxWise</div>
           <div class="a-logo-sub">Nigerian Tax Management</div>
