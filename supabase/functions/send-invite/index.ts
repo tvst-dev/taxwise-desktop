@@ -42,9 +42,11 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Accept-invite web page — Supabase verifies token, redirects here with #access_token=...
-    // This URL must be in Supabase Dashboard → Auth → URL Configuration → Redirect URLs
-    const webAcceptUrl = 'https://taxwise-auth.vercel.app/auth/accept-invite';
+    // Supabase verifies the invite token and redirects to this URL with
+    // #access_token=...&refresh_token=...&type=invite appended.
+    // taxwise.com.ng/index.html already handles the full invite auth flow (set password + deep link).
+    // This URL must be in Supabase Dashboard → Auth → URL Configuration → Redirect URLs.
+    const webAcceptUrl = 'https://taxwise.com.ng';
 
     // Generate the invite link (does NOT send an email — we send it ourselves)
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -114,7 +116,7 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from:    'TaxWise <noreply@taxwise.com.ng>',
+            from:    'TaxWise <hello@taxwise.com.ng>',
             to:      [email],
             subject: `You're invited to join ${organizationName || 'TaxWise'}`,
             html:    emailHtml,

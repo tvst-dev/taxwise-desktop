@@ -435,12 +435,13 @@
     .plan-btn.solid:hover { opacity: .92; transform: translateY(-1px); }
 
     /* ═══════════════════════════════════════════════
-       DOWNLOAD CTA
+       DOWNLOAD & RELEASES
     ═══════════════════════════════════════════════ */
     #download {
-      text-align: center; padding: 120px 0;
-      background: linear-gradient(180deg, transparent 0%, rgba(37,99,235,0.05) 40%, rgba(37,99,235,0.03) 70%, transparent 100%);
+      padding: 96px 0 100px;
+      background: linear-gradient(180deg, transparent 0%, rgba(37,99,235,0.04) 40%, transparent 100%);
       border-top: 1px solid var(--border);
+      position: relative; z-index: 1;
     }
     .dl-super {
       display: inline-flex; align-items: center; gap: 8px;
@@ -448,27 +449,140 @@
       background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.18);
       font-size: 13px; font-weight: 600; color: #34D399; margin-bottom: 24px;
     }
-    #download h2 {
-      font-size: clamp(32px,5vw,56px); font-weight: 900;
-      letter-spacing: -.03em; line-height: 1.08; margin-bottom: 16px;
+    .dl-header { text-align: center; margin-bottom: 56px; }
+    .dl-header h2 {
+      font-size: clamp(30px,4vw,48px); font-weight: 900;
+      letter-spacing: -.03em; line-height: 1.1; margin-bottom: 12px;
     }
-    #download p { font-size: 18px; color: var(--muted); margin-bottom: 44px; }
+    .dl-header p { font-size: 17px; color: var(--muted); }
+
+    /* Latest release card */
+    .rel-hero {
+      max-width: 860px; margin: 0 auto;
+      background: linear-gradient(145deg, rgba(37,99,235,0.06) 0%, rgba(139,92,246,0.04) 100%);
+      border: 1px solid rgba(59,130,246,0.2); border-radius: 20px; overflow: hidden;
+      box-shadow: 0 0 0 1px rgba(59,130,246,0.07), 0 24px 80px rgba(0,0,0,0.28);
+    }
+    .rel-hero-top {
+      display: grid; grid-template-columns: 1fr auto;
+      align-items: start; gap: 32px;
+      padding: 36px 40px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .rel-version-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 5px 14px; border-radius: 100px;
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.22);
+      font-size: 12px; font-weight: 700; color: #93C5FD;
+      text-transform: uppercase; letter-spacing: .07em; margin-bottom: 12px;
+    }
+    .rel-version { font-size: 34px; font-weight: 900; color: var(--text); letter-spacing: -.03em; margin-bottom: 8px; }
+    .rel-meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+    .rel-meta-item { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--dim); }
+    .rel-dl-col { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; padding-top: 4px; }
+    .rel-dl-btn {
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, var(--blue-dk) 0%, #1E40AF 100%);
+      border-radius: 12px; color: #fff; font-size: 15px; font-weight: 700;
+      text-decoration: none; white-space: nowrap;
+      box-shadow: 0 6px 24px var(--blue-glow);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .rel-dl-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 40px var(--blue-glow); }
+    .rel-filesize { font-size: 12px; color: var(--dim); }
+    .rel-hero-body { padding: 28px 40px; }
+    .rel-notes-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--muted); margin-bottom: 16px;
+    }
+    .rn-list { list-style: none; display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+    .rn-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--muted); line-height: 1.55; }
+    .rn-list li::before { content: '→'; color: var(--blue); font-size: 12px; margin-top: 2px; flex-shrink: 0; }
+    .rn-h2 {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .09em; color: var(--text); margin: 18px 0 10px;
+      padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    }
+    .rn-text { font-size: 13px; color: var(--dim); line-height: 1.65; margin-bottom: 8px; }
+
+    /* Previous releases accordion */
+    .prev-releases { max-width: 860px; margin: 40px auto 0; }
+    .prev-releases-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--dim); margin-bottom: 14px;
+    }
+    .prev-release {
+      border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px;
+      overflow: hidden; transition: border-color .2s;
+    }
+    .prev-release:hover { border-color: var(--border-hi); }
+    .prev-release-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 15px 20px; cursor: pointer; user-select: none; gap: 16px;
+    }
+    .prev-release-hdr:hover { background: rgba(255,255,255,0.02); }
+    .prev-rel-left { display: flex; align-items: center; gap: 14px; }
+    .prev-rel-ver { font-size: 14px; font-weight: 700; color: var(--text); font-family: monospace; }
+    .prev-rel-date { font-size: 12px; color: var(--dim); }
+    .prev-rel-chevron { color: var(--dim); transition: transform .2s; font-size: 11px; flex-shrink: 0; }
+    .prev-release.open .prev-rel-chevron { transform: rotate(90deg); }
+    .prev-release-body { display: none; padding: 0 20px 18px; border-top: 1px solid var(--border); }
+    .prev-release.open .prev-release-body { display: block; padding-top: 16px; }
+    .prev-rel-dl-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border-hi);
+      color: var(--muted); font-size: 13px; font-weight: 500;
+      text-decoration: none; margin-bottom: 14px;
+      transition: border-color .15s, color .15s;
+    }
+    .prev-rel-dl-btn:hover { border-color: var(--muted); color: var(--text); }
+
+    /* Loading skeleton */
+    .rel-skeleton {
+      max-width: 860px; margin: 0 auto;
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 60px 40px; text-align: center; color: var(--dim); font-size: 14px;
+      background: var(--surface);
+    }
+    .rel-spin {
+      display: inline-block; width: 18px; height: 18px;
+      border: 2px solid var(--border); border-top-color: var(--blue);
+      border-radius: 50%; animation: spin .7s linear infinite;
+      vertical-align: middle; margin-right: 8px;
+    }
+
+    /* GitHub link */
+    .gh-releases-link {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 14px; color: var(--muted); text-decoration: none;
+      border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1px;
+      transition: color .15s, border-color .15s;
+    }
+    .gh-releases-link:hover { color: var(--text); border-color: var(--muted); }
+
+    /* Hero download buttons (kept for nav scrolling) */
     .dl-btn-main {
       display: inline-flex; align-items: center; gap: 14px;
-      padding: 18px 44px;
+      padding: 16px 36px;
       background: linear-gradient(135deg, var(--blue-dk) 0%, #1E40AF 100%);
-      border-radius: 14px; color: #fff; font-size: 18px; font-weight: 800;
-      text-decoration: none;
-      transition: transform .2s, box-shadow .2s;
+      border-radius: 12px; color: #fff; font-size: 17px; font-weight: 800;
+      text-decoration: none; transition: transform .2s, box-shadow .2s;
       box-shadow: 0 8px 32px var(--blue-glow);
     }
-    .dl-btn-main:hover { transform: translateY(-4px); box-shadow: 0 18px 50px var(--blue-glow); }
-    .dl-btn-icon { font-size: 22px; }
+    .dl-btn-main:hover { transform: translateY(-3px); box-shadow: 0 16px 48px var(--blue-glow); }
+    .dl-btn-icon { font-size: 20px; }
     .dl-meta {
-      margin-top: 22px; font-size: 13px; color: var(--dim);
-      display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap;
+      margin-top: 20px; font-size: 13px; color: var(--dim);
+      display: flex; align-items: center; justify-content: center; gap: 22px; flex-wrap: wrap;
     }
     .dl-meta-item { display: flex; align-items: center; gap: 6px; }
+
+    @media (max-width: 700px) {
+      .rel-hero-top { grid-template-columns: 1fr; gap: 20px; }
+      .rel-dl-col { align-items: flex-start; }
+      .rel-hero-top, .rel-hero-body { padding: 22px 20px; }
+    }
 
     /* ═══════════════════════════════════════════════
        FOOTER
@@ -643,7 +757,7 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="#pricing">Pricing</a></li>
-        <li><a href="#download">Download</a></li>
+        <li><a href="#download">Releases</a></li>
       </ul>
       <a href="#download" class="nav-dl">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -969,32 +1083,35 @@
   <!-- ── Download CTA ── -->
   <section id="download">
     <div class="container">
-      <div class="dl-super">✦ Windows 10 &amp; 11 — 64-bit</div>
-      <h2>Download TaxWise<br><span class="grad">Free Today</span></h2>
-      <p>Join Nigerian businesses automating their tax compliance.<br>No credit card required to get started.</p>
-      <a href="#" id="main-dl-btn" class="dl-btn-main">
-        <span class="dl-btn-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        </span>
-        Download TaxWise for Windows
-      </a>
-      <div class="dl-meta">
-        <div class="dl-meta-item">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Free download &amp; setup
+
+      <!-- Header -->
+      <div class="dl-header">
+        <div class="dl-super">✦ Windows 10 &amp; 11 — 64-bit · Free to download</div>
+        <h2>Download TaxWise<br><span class="grad">Latest Release</span></h2>
+        <p>Always free. Ships with auto-updates. No credit card required.</p>
+      </div>
+
+      <!-- Latest release card — populated by fetchReleases() -->
+      <div id="latest-release-card">
+        <div class="rel-skeleton">
+          <span class="rel-spin"></span> Fetching latest release from GitHub…
         </div>
-        <div class="dl-meta-item">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Windows 10 / 11 (64-bit)
+      </div>
+
+      <!-- Previous releases accordion — populated by fetchReleases() -->
+      <div id="prev-releases-section" style="display:none">
+        <div class="prev-releases">
+          <div class="prev-releases-label">Previous Releases</div>
+          <div id="prev-releases-items"></div>
         </div>
-        <div class="dl-meta-item">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Works offline
-        </div>
-        <div class="dl-meta-item">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Auto-updates included
-        </div>
+      </div>
+
+      <!-- GitHub link -->
+      <div style="text-align:center;margin-top:40px;">
+        <a href="https://github.com/tvst-dev/taxwise-desktop/releases" target="_blank" rel="noopener" class="gh-releases-link">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          View all releases &amp; changelogs on GitHub
+        </a>
       </div>
     </div>
   </section>
@@ -1079,6 +1196,142 @@
     el.dataset.delay = (i % 3) * 90;
     observer.observe(el);
   });
+
+  /* ─────────────────────────────────────────────
+     GITHUB RELEASES
+  ─────────────────────────────────────────────── */
+  const GITHUB_REPO = 'tvst-dev/taxwise-desktop';
+
+  function fmtBytes(n) {
+    if (!n) return '';
+    const mb = n / 1048576;
+    return mb >= 1 ? mb.toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB';
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  function parseMd(md) {
+    if (!md) return '';
+    const bold = s => s.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/`(.*?)`/g, '<code style="background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>');
+    const lines = md.split('\n');
+    let html = '', inList = false;
+    for (const raw of lines) {
+      const l = raw.trim();
+      if (!l) { if (inList) { html += '</ul>'; inList = false; } continue; }
+      if (l.startsWith('### ') || l.startsWith('## ') || l.startsWith('# ')) {
+        if (inList) { html += '</ul>'; inList = false; }
+        const text = l.replace(/^#+\s/, '');
+        html += `<div class="rn-h2">${bold(text)}</div>`;
+      } else if (l.match(/^[-*+] /)) {
+        if (!inList) { html += '<ul class="rn-list">'; inList = true; }
+        html += `<li>${bold(l.slice(2))}</li>`;
+      } else {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<p class="rn-text">${bold(l)}</p>`;
+      }
+    }
+    if (inList) html += '</ul>';
+    return html;
+  }
+
+  function getExe(release) {
+    return release.assets?.find(a => a.name.toLowerCase().endsWith('.exe')) || null;
+  }
+
+  async function fetchReleases() {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=10`);
+      if (!r.ok) throw new Error(`GitHub ${r.status}`);
+      const data = await r.json();
+      if (!Array.isArray(data) || !data.length) throw new Error('empty');
+      renderReleases(data);
+    } catch (e) {
+      // Fallback: static download button
+      document.getElementById('latest-release-card').innerHTML = `
+        <div class="rel-hero">
+          <div class="rel-hero-top">
+            <div>
+              <div class="rel-version-badge"><span style="width:6px;height:6px;border-radius:50%;background:#22C55E;animation:blink 2s infinite;display:inline-block;"></span>&nbsp;Latest Release</div>
+              <div class="rel-version">TaxWise</div>
+              <div class="rel-meta"><div class="rel-meta-item">Windows 10 / 11 · 64-bit</div></div>
+            </div>
+            <div class="rel-dl-col">
+              <a href="${DOWNLOAD_URL}" class="rel-dl-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download for Windows
+              </a>
+            </div>
+          </div>
+        </div>`;
+    }
+  }
+
+  function renderReleases(releases) {
+    const latest    = releases[0];
+    const prev      = releases.slice(1);
+    const latestExe = getExe(latest);
+    const dlUrl     = latestExe?.browser_download_url || DOWNLOAD_URL;
+    const dlSize    = fmtBytes(latestExe?.size);
+
+    // Sync hero + nav download buttons to latest GitHub release
+    document.querySelectorAll('#main-dl-btn, #hero-dl-btn').forEach(btn => {
+      btn.onclick = e => { e.preventDefault(); window.open(dlUrl, '_self'); };
+    });
+
+    const icoSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+    const calIco = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+    const winIco = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`;
+
+    document.getElementById('latest-release-card').innerHTML = `
+      <div class="rel-hero">
+        <div class="rel-hero-top">
+          <div>
+            <div class="rel-version-badge">
+              <span style="width:6px;height:6px;border-radius:50%;background:#22C55E;animation:blink 2s infinite;display:inline-block;"></span>&nbsp;Latest Release
+            </div>
+            <div class="rel-version">${latest.tag_name}</div>
+            <div class="rel-meta">
+              <div class="rel-meta-item">${calIco} ${fmtDate(latest.published_at)}</div>
+              <div class="rel-meta-item">${winIco} Windows 10 / 11 · 64-bit</div>
+              ${dlSize ? `<div class="rel-meta-item">📦 ${dlSize}</div>` : ''}
+            </div>
+          </div>
+          <div class="rel-dl-col">
+            <a href="${dlUrl}" class="rel-dl-btn">${icoSvg} Download ${latest.tag_name}</a>
+            ${dlSize ? `<div class="rel-filesize">${dlSize} · .exe installer · auto-updates</div>` : ''}
+          </div>
+        </div>
+        ${latest.body ? `<div class="rel-hero-body"><div class="rel-notes-title">What's new in ${latest.tag_name}</div>${parseMd(latest.body)}</div>` : ''}
+      </div>`;
+
+    // Previous releases
+    if (prev.length) {
+      const items = document.getElementById('prev-releases-items');
+      items.innerHTML = prev.map(rel => {
+        const exe = getExe(rel);
+        const url = exe?.browser_download_url || rel.html_url;
+        return `<div class="prev-release" onclick="this.classList.toggle('open')">
+          <div class="prev-release-hdr">
+            <div class="prev-rel-left">
+              <span class="prev-rel-ver">${rel.tag_name}</span>
+              <span class="prev-rel-date">${fmtDate(rel.published_at)}</span>
+            </div>
+            <span class="prev-rel-chevron">▶</span>
+          </div>
+          <div class="prev-release-body">
+            <a href="${url}" ${exe ? '' : 'target="_blank" rel="noopener"'} class="prev-rel-dl-btn">
+              ${icoSvg} Download ${rel.tag_name}${fmtBytes(exe?.size) ? ' · ' + fmtBytes(exe.size) : ''}
+            </a>
+            ${rel.body ? `<div>${parseMd(rel.body)}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      document.getElementById('prev-releases-section').style.display = 'block';
+    }
+  }
 
   /* ─────────────────────────────────────────────
      AUTH FLOW
@@ -1332,6 +1585,7 @@
   }
 
   init();
+  fetchReleases();
 </script>
 </body>
 </html>
