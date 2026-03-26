@@ -196,16 +196,33 @@ app.whenReady().then(async () => {
 
   // Auto-update: only in packaged builds, not dev
   if (app.isPackaged) {
-    // Configure logger for update diagnostics
     autoUpdater.logger = {
-      info: (msg) => console.log('[updater]', msg),
-      warn: (msg) => console.warn('[updater]', msg),
-      error: (msg) => console.error('[updater]', msg)
+      info:  (msg) => console.log('[updater]', msg),
+      warn:  (msg) => console.warn('[updater]', msg),
+      error: (msg) => console.error('[updater]', msg),
     };
+
+    // Allow a bundled or environment-provided GitHub token for private-repo update checks.
+    // In production builds, set GH_TOKEN in the build environment or embed it below.
+    const ghToken = process.env.GH_TOKEN;
+    if (ghToken) {
+      autoUpdater.requestHeaders = { Authorization: `token ${ghToken}` };
+    }
+
+    // Disable automatic download — let the user decide when to install
+    autoUpdater.autoDownload = false;
 
     autoUpdater.on('update-available', (info) => {
       console.log('[updater] Update available:', info.version);
       mainWindow?.webContents.send('update-available', { version: info.version });
+    });
+
+    autoUpdater.on('download-progress', (prog) => {
+      mainWindow?.webContents.send('update-progress', {
+        percent: Math.round(prog.percent),
+        transferred: prog.transferred,
+        total: prog.total,
+      });
     });
 
     autoUpdater.on('update-downloaded', (info) => {
@@ -213,8 +230,13 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('update-downloaded', { version: info.version });
     });
 
+    autoUpdater.on('update-not-available', () => {
+      console.log('[updater] App is up to date.');
+    });
+
     autoUpdater.on('error', (err) => {
       console.error('[updater] Error:', err.message);
+      mainWindow?.webContents.send('update-error', { message: err.message });
     });
 
     // Check for update silently shortly after launch
@@ -491,6 +513,17 @@ ipcMain.handle('file:saveBuffer', async (event, { defaultPath, filters, buffer }
     return { success: false, canceled: true };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+// Auto-updater IPC — renderer can trigger download and install
+ipcMain.handle('updater:downloadAndInstall', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    autoUpdater.quitAndInstall(false, true);
+  } catch (err) {
+    console.error('[updater] Download/install failed:', err.message);
+    throw err;
   }
 });
 
