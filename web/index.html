@@ -378,7 +378,7 @@
     /* ═══════════════════════════════════════════════
        PRICING
     ═══════════════════════════════════════════════ */
-    .pricing-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 24px; max-width: 840px; margin: 0 auto; }
+    .pricing-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; max-width: 1060px; margin: 0 auto; }
     .price-card {
       background: var(--white); border: 1.5px solid var(--border);
       border-radius: 20px; padding: 40px 36px; position: relative;
@@ -700,7 +700,7 @@
       .stat-item:nth-child(3), .stat-item:nth-child(4) { border-top: 1px solid rgba(255,255,255,0.10); }
       .steps-grid      { grid-template-columns: 1fr; }
       .steps-grid::before { display: none; }
-      .pricing-grid    { grid-template-columns: 1fr; max-width: 440px; }
+      .pricing-grid    { grid-template-columns: 1fr; max-width: 460px; }
       .nav-links       { display: none; }
     }
     @media (max-width: 600px) {
@@ -1026,43 +1026,61 @@
         <p class="section-sub">Start free. Upgrade when your business grows. No hidden fees, no per-user pricing surprises.</p>
       </div>
       <div class="pricing-grid">
-        <!-- SME -->
+        <!-- Startup -->
         <div class="price-card">
-          <div class="plan-name">SME</div>
+          <div class="plan-name">Startup</div>
           <div class="plan-price">
-            <span class="cur">₦</span><span class="amt">24,999</span><span class="per">/month</span>
+            <span class="cur">₦</span><span class="amt">10,000</span><span class="per">/month</span>
           </div>
-          <p class="plan-desc">Perfect for small and growing Nigerian businesses that need core tax compliance tools.</p>
+          <p class="plan-desc">For solo founders and freelancers who need basic tax tracking and compliance reporting.</p>
           <ul class="plan-feats">
-            <li><span class="pf-icon">✓</span> Up to 3 team members</li>
-            <li><span class="pf-icon">✓</span> PAYE, VAT &amp; WHT calculations</li>
+            <li><span class="pf-icon">✓</span> Single user</li>
             <li><span class="pf-icon">✓</span> Income &amp; expense tracking</li>
-            <li><span class="pf-icon">✓</span> Document AI scanner (50 docs/mo)</li>
-            <li><span class="pf-icon">✓</span> Tax deadline reminders</li>
-            <li><span class="pf-icon">✓</span> 5 GB document storage</li>
-            <li><span class="pf-icon">✓</span> Email support</li>
+            <li><span class="pf-icon">✓</span> Automated tax calculations</li>
+            <li><span class="pf-icon">✓</span> Basic compliance reports</li>
+            <li><span class="pf-icon">✓</span> Document AI (10 scans/mo)</li>
+            <li><span class="pf-icon">✓</span> Single business profile</li>
           </ul>
-          <a href="#download" class="plan-btn ghost">Get started free</a>
+          <a href="#download" class="plan-btn ghost">Get started</a>
         </div>
-        <!-- Enterprise -->
+        <!-- SME — Most Popular -->
         <div class="price-card pop">
           <div class="pop-tag">Most Popular</div>
-          <div class="plan-name">Enterprise</div>
+          <div class="plan-name">SME</div>
           <div class="plan-price">
-            <span class="cur">₦</span><span class="amt">49,999</span><span class="per">/month</span>
+            <span class="cur">₦</span><span class="amt">25,000</span><span class="per">/month</span>
           </div>
-          <p class="plan-desc">For established businesses and accounting firms that need full compliance coverage and team collaboration.</p>
+          <p class="plan-desc">For small and growing Nigerian businesses that need full compliance tools and team access.</p>
           <ul class="plan-feats">
-            <li><span class="pf-icon">✓</span> Unlimited team members</li>
-            <li><span class="pf-icon">✓</span> All tax types incl. CIT &amp; CGT</li>
-            <li><span class="pf-icon">✓</span> POS system &amp; inventory management</li>
-            <li><span class="pf-icon">✓</span> Document AI — unlimited scans</li>
-            <li><span class="pf-icon">✓</span> Bank reconciliation via Mono</li>
-            <li><span class="pf-icon">✓</span> 50 GB document storage</li>
-            <li><span class="pf-icon">✓</span> AI Tax Assistant (chat)</li>
-            <li><span class="pf-icon">✓</span> Priority phone &amp; WhatsApp support</li>
+            <li><span class="pf-icon">✓</span> Everything in Startup</li>
+            <li><span class="pf-icon">✓</span> Up to 5 team members</li>
+            <li><span class="pf-icon">✓</span> Audit-ready reports</li>
+            <li><span class="pf-icon">✓</span> Multi-income streams</li>
+            <li><span class="pf-icon">✓</span> POS sales tracking</li>
+            <li><span class="pf-icon">✓</span> Bank account integration</li>
+            <li><span class="pf-icon">✓</span> Document AI (50 scans/mo)</li>
+            <li><span class="pf-icon">✓</span> Compliance reminders</li>
           </ul>
           <a href="#download" class="plan-btn solid">Download &amp; Subscribe</a>
+        </div>
+        <!-- Corporate -->
+        <div class="price-card">
+          <div class="plan-name">Corporate</div>
+          <div class="plan-price">
+            <span class="cur">₦</span><span class="amt">60,000</span><span class="per">/month</span>
+          </div>
+          <p class="plan-desc">For established businesses and accounting firms needing unlimited scale and advanced features.</p>
+          <ul class="plan-feats">
+            <li><span class="pf-icon">✓</span> Everything in SME</li>
+            <li><span class="pf-icon">✓</span> Unlimited users</li>
+            <li><span class="pf-icon">✓</span> Multi-user roles &amp; permissions</li>
+            <li><span class="pf-icon">✓</span> Advanced reporting</li>
+            <li><span class="pf-icon">✓</span> Multi-account bank integration</li>
+            <li><span class="pf-icon">✓</span> Unlimited document AI scans</li>
+            <li><span class="pf-icon">✓</span> API integrations</li>
+            <li><span class="pf-icon">✓</span> Priority phone &amp; WhatsApp support</li>
+          </ul>
+          <a href="#download" class="plan-btn ghost">Get started</a>
         </div>
       </div>
     </div>
