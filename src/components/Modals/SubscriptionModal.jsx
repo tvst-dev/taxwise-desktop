@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X, CreditCard, Check, Lock,
-  Calendar, RefreshCw, ChevronRight
+  X, Check, Lock,
+  Calendar, RefreshCw, ChevronRight, CreditCard
 } from 'lucide-react';
 import { useUIStore, useAuthStore } from '../../store';
 import { supabase } from '../../services/supabase';
@@ -12,6 +12,18 @@ import SubscriptionService, {
 import config from '../../config';
 import toast from 'react-hot-toast';
 
+// Load Paystack inline script once
+function loadPaystackScript() {
+  return new Promise((resolve, reject) => {
+    if (window.PaystackPop) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://js.paystack.co/v1/inline.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load Paystack'));
+    document.head.appendChild(s);
+  });
+}
+
 const SubscriptionModal = () => {
   const { activeModal, closeModal } = useUIStore();
   const { organization, user } = useAuthStore();
@@ -20,24 +32,14 @@ const SubscriptionModal = () => {
   const [selectedPlan, setSelectedPlan] = useState('sme');
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [view, setView] = useState('plans'); // 'plans', 'checkout', 'otp', 'success'
-
-  // Card form state
-  const [card, setCard] = useState({ number: '', expiry: '', cvv: '' });
-  const [cardErrors, setCardErrors] = useState({});
-  const [otpValue, setOtpValue] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
+  const [view, setView] = useState('plans'); // 'plans' | 'checkout' | 'success'
 
   const isOpen = activeModal === 'subscription';
 
   useEffect(() => {
     if (isOpen && organization?.id) {
       loadSubscription();
-      // Reset state when modal opens
       setView('plans');
-      setCard({ number: '', expiry: '', cvv: '' });
-      setCardErrors({});
-      setOtpValue('');
     }
   }, [isOpen, organization?.id]);
 
@@ -53,39 +55,7 @@ const SubscriptionModal = () => {
     }
   };
 
-  // Card formatting
-  const formatCardNumber = (value) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    const matches = v.match(/\d{4,16}/g);
-    const match = (matches && matches[0]) || '';
-    const parts = [];
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
-    }
-    return parts.length ? parts.join(' ') : value;
-  };
-
-  const formatExpiry = (value) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    if (v.length >= 2) {
-      return v.substring(0, 2) + '/' + v.substring(2, 4);
-    }
-    return v;
-  };
-
-  const validateCard = () => {
-    const errors = {};
-    const cardNum = card.number.replace(/\s/g, '');
-    
-    if (!cardNum || cardNum.length < 16) errors.number = 'Valid card number required';
-    if (!card.expiry || card.expiry.length < 5) errors.expiry = 'Valid expiry required';
-    if (!card.cvv || card.cvv.length < 3) errors.cvv = 'Valid CVV required';
-    
-    setCardErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // Shared fetch helper — uses singleton supabase client (no fresh client = no abort errors)
+  // Shared fetch helper for Supabase edge function
   const paystackFetch = async (body) => {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
@@ -103,74 +73,49 @@ const SubscriptionModal = () => {
     return data;
   };
 
-  // Invisible card charge — no popup, processed entirely server-side
-  const handlePayment = async () => {
-    if (!validateCard()) return;
+  // Open Paystack standard popup — handles card + bank transfer
+  const openPaystackPopup = async () => {
     if (!user?.email) { toast.error('Email address required for billing'); return; }
     setIsProcessing(true);
     try {
+      await loadPaystackScript();
       const planData = SUBSCRIPTION_PLANS[selectedPlan];
-      const amount = planData.monthlyPrice;
-      const [expiryMonth, expiryYear] = card.expiry.split('/');
+      const ref = `txw_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
-      const data = await paystackFetch({
-        action: 'charge_card',
+      const handler = window.PaystackPop.setup({
+        key: config.PAYSTACK_PUBLIC_KEY,
         email: user.email,
-        amount: amount * 100,
-        plan: selectedPlan,
-        card: {
-          number: card.number.replace(/\s/g, ''),
-          cvv: card.cvv,
-          expiry_month: expiryMonth?.trim(),
-          expiry_year: '20' + (expiryYear?.trim() || ''),
+        amount: planData.monthlyPrice * 100, // kobo
+        currency: 'NGN',
+        ref,
+        channels: ['card', 'bank_transfer'],
+        label: `TaxWise ${planData.name}`,
+        metadata: {
+          organization_id: organization?.id,
+          plan: selectedPlan,
+          custom_fields: [
+            { display_name: 'Plan', variable_name: 'plan', value: planData.name },
+            { display_name: 'Organization', variable_name: 'org_id', value: organization?.id || '' },
+          ],
         },
-        metadata: { organization_id: organization?.id, billing_cycle: billingCycle },
+        callback: (response) => {
+          verifyAndComplete(response.reference);
+        },
+        onClose: () => {
+          setIsProcessing(false);
+        },
       });
 
-      if (data.success) {
-        setPaymentReference(data.reference);
-        if (data.status === 'success' || data.status === 'charge_attempted') {
-          await verifyAndComplete(data.reference);
-        } else if (data.status === 'send_otp' || data.status === 'send_pin') {
-          setView('otp');
-          toast.success(data.display_text || 'Enter the OTP sent to your phone');
-        } else if (data.status === '3ds_required') {
-          window.open(data.url, '_blank', 'width=520,height=620');
-          toast('Complete bank authentication in the popup, then return here.');
-          pollForCompletion(data.reference);
-        } else {
-          throw new Error(data.message || 'Payment failed');
-        }
-      } else {
-        throw new Error(data.error || 'Payment failed');
-      }
+      handler.openIframe();
     } catch (error) {
-      toast.error(error.message || 'Payment failed. Please try again.');
-    } finally {
+      toast.error(error.message || 'Could not open payment. Please try again.');
       setIsProcessing(false);
     }
   };
 
-  // Submit OTP
-  const handleOtpSubmit = async () => {
-    if (!otpValue || otpValue.length < 4) { toast.error('Please enter a valid OTP'); return; }
-    setIsProcessing(true);
-    try {
-      const data = await paystackFetch({ action: 'submit_otp', reference: paymentReference, otp: otpValue });
-      if (data.status && data.data?.status === 'success') {
-        await verifyAndComplete(paymentReference);
-      } else {
-        throw new Error(data.message || 'OTP verification failed');
-      }
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Verify and activate subscription
+  // Verify reference with Supabase edge function and activate subscription
   const verifyAndComplete = async (reference) => {
+    setIsProcessing(true);
     try {
       const data = await paystackFetch({
         action: 'verify',
@@ -181,40 +126,24 @@ const SubscriptionModal = () => {
       });
       if (data.success) {
         setView('success');
-        toast.success('Subscription activated successfully!');
+        toast.success('Subscription activated!');
         await loadSubscription();
       } else {
         throw new Error(data.error || 'Verification failed');
       }
     } catch (error) {
-      toast.error(error.message);
-      setView('checkout');
+      toast.error(error.message || 'Payment verification failed. Contact support if you were charged.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  // Poll for 3DS completion
-  const pollForCompletion = (reference) => {
-    let attempts = 0;
-    const poll = async () => {
-      if (++attempts > 60) { toast.error('Authentication timed out'); setView('checkout'); return; }
-      try {
-        const data = await paystackFetch({ action: 'verify', reference, organization_id: organization?.id, plan: selectedPlan, is_trial: false });
-        if (data.success) { setView('success'); toast.success('Subscription activated!'); await loadSubscription(); }
-        else setTimeout(poll, 5000);
-      } catch { setTimeout(poll, 5000); }
-    };
-    setTimeout(poll, 5000);
-  };
-
-  const handleUpdatePaymentMethod = async () => {
-    // Show card form for updating payment method
+  const handleUpdatePaymentMethod = () => {
     setView('checkout');
-    setCard({ number: '', expiry: '', cvv: '' });
   };
 
   const handleCancelSubscription = async () => {
     if (!confirm('Are you sure you want to cancel your subscription?')) return;
-
     setIsProcessing(true);
     try {
       await SubscriptionService.cancel(organization.id);
@@ -227,9 +156,7 @@ const SubscriptionModal = () => {
     }
   };
 
-  const formatPrice = (amount) => {
-    return `₦${amount.toLocaleString()}`;
-  };
+  const formatPrice = (amount) => `₦${amount.toLocaleString()}`;
 
   if (!isOpen) return null;
 
@@ -238,17 +165,16 @@ const SubscriptionModal = () => {
     : null;
 
   const selectedPlanData = SUBSCRIPTION_PLANS[selectedPlan];
-  const selectedAmount = selectedPlanData.monthlyPrice;
 
   return (
     <div style={styles.overlay} onClick={closeModal}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+
         {/* Header */}
         <div style={styles.header}>
           <h2 style={styles.title}>
-            {view === 'success' ? 'Subscription Activated' : 
-             view === 'otp' ? 'Verify Payment' :
-             view === 'checkout' ? 'Payment Details' : 'Subscription Plans'}
+            {view === 'success' ? 'Subscription Activated' :
+             view === 'checkout' ? 'Payment' : 'Subscription Plans'}
           </h2>
           <button style={styles.closeButton} onClick={closeModal}>
             <X size={20} />
@@ -260,79 +186,33 @@ const SubscriptionModal = () => {
             <RefreshCw size={32} className="spin" style={{ color: '#3B82F6' }} />
             <span style={styles.loadingText}>Loading subscription details...</span>
           </div>
+
         ) : view === 'success' ? (
           <div style={styles.successContainer}>
-            <div style={styles.successIcon}>
-              <Check size={48} />
-            </div>
+            <div style={styles.successIcon}><Check size={48} /></div>
             <h3 style={styles.successTitle}>Welcome to TaxWise!</h3>
             <p style={styles.successText}>
               Your {SUBSCRIPTION_PLANS[selectedPlan].name} subscription is now active.
               You have full access to all features.
             </p>
-            <button style={styles.primaryButton} onClick={closeModal}>
-              Get Started
-            </button>
+            <button style={styles.primaryButton} onClick={closeModal}>Get Started</button>
           </div>
-        ) : view === 'otp' ? (
-          <div style={styles.content}>
-            <div style={styles.otpContainer}>
-              <Lock size={48} color="#2563EB" />
-              <h3 style={styles.otpTitle}>Enter OTP</h3>
-              <p style={styles.otpText}>Enter the code sent to your phone</p>
 
-              <input
-                type="text"
-                value={otpValue}
-                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter OTP"
-                style={styles.otpInput}
-                maxLength={6}
-                autoFocus
-              />
-
-              <div style={styles.otpActions}>
-                <button
-                  style={styles.backButton}
-                  onClick={() => setView('checkout')}
-                >
-                  Back
-                </button>
-                <button
-                  style={styles.payButton}
-                  onClick={handleOtpSubmit}
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? (
-                    <>
-                      <RefreshCw size={16} className="spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    'Verify OTP'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
         ) : view === 'checkout' ? (
           <div style={styles.content}>
-            {/* Plan Summary */}
+            {/* Order summary */}
             <div style={styles.checkoutSummary}>
               <h3 style={styles.checkoutTitle}>Order Summary</h3>
-
               <div style={styles.summaryRow}>
                 <span>{selectedPlanData.name}</span>
                 <span>{formatPrice(selectedPlanData.monthlyPrice)}</span>
               </div>
-
               <div style={styles.summaryRow}>
                 <span>Billing Cycle</span>
                 <span>Monthly</span>
               </div>
-
               <div style={styles.totalRow}>
-                <span>Total</span>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#E6EDF3' }}>Total</span>
                 <span style={styles.totalAmount}>
                   {formatPrice(selectedPlanData.monthlyPrice)}
                   <span style={styles.billingPeriod}>/month</span>
@@ -340,99 +220,48 @@ const SubscriptionModal = () => {
               </div>
             </div>
 
-            {/* Pay via Paystack popup */}
-            <div style={styles.cardForm}>
+            {/* Payment method info */}
+            <div style={styles.paymentInfo}>
+              <div style={styles.paymentInfoRow}>
+                <CreditCard size={16} style={{ color: '#22C55E', flexShrink: 0 }} />
+                <span>Card payment (Visa, Mastercard, Verve)</span>
+              </div>
+              <div style={styles.paymentInfoRow}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M7 8V6a5 5 0 0 1 10 0v2"/></svg>
+                <span>Bank transfer (pay directly from your bank)</span>
+              </div>
               <div style={styles.secureNotice}>
-                <Lock size={14} />
-                <span>Secure payment powered by Paystack — PCI DSS compliant</span>
-              </div>
-
-              {/* Card Number */}
-              <div style={styles.field}>
-                <label style={styles.label}>Card Number</label>
-                <div style={styles.inputWrapper}>
-                  <CreditCard size={18} style={styles.inputIcon} />
-                  <input
-                    type="text"
-                    value={card.number}
-                    onChange={(e) => setCard({ ...card, number: formatCardNumber(e.target.value) })}
-                    placeholder="1234 5678 9012 3456"
-                    style={{ ...styles.cardInput, ...(cardErrors.number && styles.inputError) }}
-                    maxLength={19}
-                  />
-                </div>
-                {cardErrors.number && <span style={styles.errorText}>{cardErrors.number}</span>}
-              </div>
-
-              {/* Expiry and CVV */}
-              <div style={styles.row}>
-                <div style={styles.field}>
-                  <label style={styles.label}>Expiry Date</label>
-                  <div style={styles.inputWrapper}>
-                    <Calendar size={18} style={styles.inputIcon} />
-                    <input
-                      type="text"
-                      value={card.expiry}
-                      onChange={(e) => setCard({ ...card, expiry: formatExpiry(e.target.value) })}
-                      placeholder="MM/YY"
-                      style={{ ...styles.cardInput, ...(cardErrors.expiry && styles.inputError) }}
-                      maxLength={5}
-                    />
-                  </div>
-                  {cardErrors.expiry && <span style={styles.errorText}>{cardErrors.expiry}</span>}
-                </div>
-
-                <div style={styles.field}>
-                  <label style={styles.label}>CVV</label>
-                  <div style={styles.inputWrapper}>
-                    <Lock size={18} style={styles.inputIcon} />
-                    <input
-                      type="password"
-                      value={card.cvv}
-                      onChange={(e) => setCard({ ...card, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                      placeholder="•••"
-                      style={{ ...styles.cardInput, ...(cardErrors.cvv && styles.inputError) }}
-                      maxLength={4}
-                    />
-                  </div>
-                  {cardErrors.cvv && <span style={styles.errorText}>{cardErrors.cvv}</span>}
-                </div>
+                <Lock size={13} />
+                <span>Secured by Paystack · PCI DSS compliant</span>
               </div>
             </div>
 
             <div style={styles.disclaimer}>
-              Your card will be saved securely for automatic monthly renewal. You can cancel anytime.
+              Your subscription renews automatically each month. You can cancel anytime.
             </div>
 
             <div style={styles.checkoutActions}>
-              <button
-                style={styles.backButton}
-                onClick={() => setView('plans')}
-              >
-                Back to Plans
+              <button style={styles.backButton} onClick={() => setView('plans')}>
+                Back
               </button>
               <button
-                style={styles.payButton}
-                onClick={handlePayment}
+                style={{ ...styles.payButton, opacity: isProcessing ? 0.7 : 1 }}
+                onClick={openPaystackPopup}
                 disabled={isProcessing}
               >
                 {isProcessing ? (
-                  <>
-                    <RefreshCw size={16} className="spin" />
-                    Processing...
-                  </>
+                  <><RefreshCw size={16} className="spin" /> Opening payment…</>
                 ) : (
-                  <>
-                    <Lock size={16} />
-                    Pay {formatPrice(selectedAmount)}
-                  </>
+                  <><Lock size={15} /> Pay {formatPrice(selectedPlanData.monthlyPrice)}</>
                 )}
               </button>
             </div>
           </div>
+
         ) : (
+          /* Plans view */
           <div style={styles.content}>
-            {/* Current Subscription Status */}
+            {/* Current subscription status */}
             {currentSubscription && currentSubscription.status !== SUBSCRIPTION_STATUS.TRIAL && (
               <div style={styles.currentPlan}>
                 <div style={styles.currentPlanHeader}>
@@ -448,7 +277,7 @@ const SubscriptionModal = () => {
                     style={{
                       ...styles.statusBadge,
                       backgroundColor: `${statusDisplay?.color}15`,
-                      color: statusDisplay?.color
+                      color: statusDisplay?.color,
                     }}
                   >
                     {statusDisplay?.text}
@@ -467,32 +296,24 @@ const SubscriptionModal = () => {
                 )}
 
                 <div style={styles.manageActions}>
-                  <button
-                    style={styles.manageButton}
-                    onClick={handleUpdatePaymentMethod}
-                    disabled={isProcessing}
-                  >
+                  <button style={styles.manageButton} onClick={handleUpdatePaymentMethod} disabled={isProcessing}>
                     Update Payment Method
                   </button>
-                  <button
-                    style={styles.cancelButton}
-                    onClick={handleCancelSubscription}
-                    disabled={isProcessing}
-                  >
+                  <button style={styles.cancelButton} onClick={handleCancelSubscription} disabled={isProcessing}>
                     Cancel Subscription
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Plans */}
+            {/* Plans grid */}
             <div style={styles.plansGrid}>
               {Object.values(SUBSCRIPTION_PLANS).map((plan) => (
                 <div
                   key={plan.id}
                   style={{
                     ...styles.planCard,
-                    ...(selectedPlan === plan.id ? styles.planCardSelected : {})
+                    ...(selectedPlan === plan.id ? styles.planCardSelected : {}),
                   }}
                   onClick={() => setSelectedPlan(plan.id)}
                 >
@@ -503,9 +324,7 @@ const SubscriptionModal = () => {
                   <div style={styles.planHeader}>
                     <h3 style={styles.planName}>{plan.name}</h3>
                     <div style={styles.planPrice}>
-                      <span style={styles.priceAmount}>
-                        {formatPrice(plan.monthlyPrice)}
-                      </span>
+                      <span style={styles.priceAmount}>{formatPrice(plan.monthlyPrice)}</span>
                       <span style={styles.pricePeriod}>/month</span>
                     </div>
                   </div>
@@ -518,16 +337,14 @@ const SubscriptionModal = () => {
                       </li>
                     ))}
                     {plan.features.length > 6 && (
-                      <li style={styles.moreFeatures}>
-                        +{plan.features.length - 6} more features
-                      </li>
+                      <li style={styles.moreFeatures}>+{plan.features.length - 6} more features</li>
                     )}
                   </ul>
 
                   <button
                     style={{
                       ...styles.selectPlanButton,
-                      ...(selectedPlan === plan.id ? styles.selectPlanButtonActive : {})
+                      ...(selectedPlan === plan.id ? styles.selectPlanButtonActive : {}),
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -545,13 +362,8 @@ const SubscriptionModal = () => {
         )}
 
         <style>{`
-          .spin {
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
+          .spin { animation: spin 1s linear infinite; }
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         `}</style>
       </div>
     </div>
@@ -560,433 +372,148 @@ const SubscriptionModal = () => {
 
 const styles = {
   overlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 9000
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000,
   },
   modal: {
-    width: '100%',
-    maxWidth: '800px',
-    maxHeight: '90vh',
-    backgroundColor: '#161B22',
-    borderRadius: '16px',
-    border: '1px solid #30363D',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column'
+    width: '100%', maxWidth: '800px', maxHeight: '90vh',
+    backgroundColor: '#161B22', borderRadius: '16px',
+    border: '1px solid #30363D', overflow: 'hidden',
+    display: 'flex', flexDirection: 'column',
   },
   header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '20px 24px',
-    borderBottom: '1px solid #30363D'
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '20px 24px', borderBottom: '1px solid #30363D',
   },
-  title: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#E6EDF3',
-    margin: 0
-  },
+  title: { fontSize: '18px', fontWeight: '600', color: '#E6EDF3', margin: 0 },
   closeButton: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '32px',
-    height: '32px',
-    backgroundColor: 'transparent',
-    border: 'none',
-    color: '#8B949E',
-    cursor: 'pointer',
-    borderRadius: '6px'
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '32px', height: '32px', backgroundColor: 'transparent',
+    border: 'none', color: '#8B949E', cursor: 'pointer', borderRadius: '6px',
   },
-  content: {
-    padding: '24px',
-    overflowY: 'auto'
-  },
+  content: { padding: '24px', overflowY: 'auto' },
   loadingContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '60px',
-    gap: '16px'
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    justifyContent: 'center', padding: '60px', gap: '16px',
   },
-  loadingText: {
-    color: '#8B949E',
-    fontSize: '14px'
-  },
+  loadingText: { color: '#8B949E', fontSize: '14px' },
   successContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '48px',
-    textAlign: 'center'
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    justifyContent: 'center', padding: '48px', textAlign: 'center',
   },
   successIcon: {
-    width: '80px',
-    height: '80px',
-    borderRadius: '50%',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#22C55E',
-    marginBottom: '24px'
+    width: '80px', height: '80px', borderRadius: '50%',
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    color: '#22C55E', marginBottom: '24px',
   },
-  successTitle: {
-    fontSize: '24px',
-    fontWeight: '600',
-    color: '#E6EDF3',
-    margin: '0 0 12px 0'
-  },
-  successText: {
-    fontSize: '14px',
-    color: '#8B949E',
-    margin: '0 0 32px 0'
-  },
+  successTitle: { fontSize: '24px', fontWeight: '600', color: '#E6EDF3', margin: '0 0 12px 0' },
+  successText: { fontSize: '14px', color: '#8B949E', margin: '0 0 32px 0' },
   primaryButton: {
-    padding: '14px 32px',
-    backgroundColor: '#2563EB',
-    border: 'none',
-    borderRadius: '8px',
-    color: 'white',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer'
+    padding: '14px 32px', backgroundColor: '#2563EB', border: 'none',
+    borderRadius: '8px', color: 'white', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
   },
   currentPlan: {
-    padding: '20px',
-    backgroundColor: '#0D1117',
-    border: '1px solid #30363D',
-    borderRadius: '12px',
-    marginBottom: '24px'
+    padding: '20px', backgroundColor: '#0D1117',
+    border: '1px solid #30363D', borderRadius: '12px', marginBottom: '24px',
   },
   currentPlanHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px'
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'flex-start', marginBottom: '12px',
   },
-  currentLabel: {
-    fontSize: '12px',
-    color: '#8B949E',
-    textTransform: 'uppercase'
-  },
-  currentPlanName: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#E6EDF3',
-    margin: '4px 0 0 0'
-  },
-  statusBadge: {
-    padding: '4px 12px',
-    borderRadius: '9999px',
-    fontSize: '12px',
-    fontWeight: '500'
-  },
+  currentLabel: { fontSize: '12px', color: '#8B949E', textTransform: 'uppercase' },
+  currentPlanName: { fontSize: '18px', fontWeight: '600', color: '#E6EDF3', margin: '4px 0 0 0' },
+  statusBadge: { padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '500' },
   renewalInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '13px',
-    color: '#8B949E',
-    marginBottom: '16px'
+    display: 'flex', alignItems: 'center', gap: '8px',
+    fontSize: '13px', color: '#8B949E', marginBottom: '16px',
   },
-  manageActions: {
-    display: 'flex',
-    gap: '12px'
-  },
+  manageActions: { display: 'flex', gap: '12px' },
   manageButton: {
-    padding: '10px 16px',
-    backgroundColor: '#21262D',
-    border: 'none',
-    borderRadius: '6px',
-    color: '#E6EDF3',
-    fontSize: '13px',
-    cursor: 'pointer'
+    padding: '10px 16px', backgroundColor: '#21262D', border: 'none',
+    borderRadius: '6px', color: '#E6EDF3', fontSize: '13px', cursor: 'pointer',
   },
   cancelButton: {
-    padding: '10px 16px',
-    backgroundColor: 'transparent',
-    border: '1px solid #30363D',
-    borderRadius: '6px',
-    color: '#EF4444',
-    fontSize: '13px',
-    cursor: 'pointer'
+    padding: '10px 16px', backgroundColor: 'transparent',
+    border: '1px solid #30363D', borderRadius: '6px',
+    color: '#EF4444', fontSize: '13px', cursor: 'pointer',
   },
-  plansGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '16px'
-  },
+  plansGrid: { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '16px' },
   planCard: {
-    position: 'relative',
-    padding: '24px',
-    backgroundColor: '#0D1117',
-    border: '1px solid #30363D',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    transition: 'all 0.15s ease'
+    position: 'relative', padding: '24px', backgroundColor: '#0D1117',
+    border: '1px solid #30363D', borderRadius: '12px',
+    cursor: 'pointer', transition: 'all 0.15s ease',
   },
-  planCardSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: 'rgba(37, 99, 235, 0.05)'
-  },
+  planCardSelected: { borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.05)' },
   popularBadge: {
-    position: 'absolute',
-    top: '-10px',
-    right: '16px',
-    padding: '4px 12px',
-    backgroundColor: '#2563EB',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: '600',
-    color: 'white'
+    position: 'absolute', top: '-10px', right: '16px',
+    padding: '4px 12px', backgroundColor: '#2563EB',
+    borderRadius: '4px', fontSize: '11px', fontWeight: '600', color: 'white',
   },
-  planHeader: {
-    marginBottom: '20px'
-  },
-  planName: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#E6EDF3',
-    margin: '0 0 12px 0'
-  },
-  planPrice: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: '4px'
-  },
-  priceAmount: {
-    fontSize: '32px',
-    fontWeight: '700',
-    color: '#E6EDF3'
-  },
-  pricePeriod: {
-    fontSize: '14px',
-    color: '#8B949E'
-  },
-  featureList: {
-    listStyle: 'none',
-    margin: '0 0 20px 0',
-    padding: 0
-  },
+  planHeader: { marginBottom: '20px' },
+  planName: { fontSize: '18px', fontWeight: '600', color: '#E6EDF3', margin: '0 0 12px 0' },
+  planPrice: { display: 'flex', alignItems: 'baseline', gap: '4px' },
+  priceAmount: { fontSize: '32px', fontWeight: '700', color: '#E6EDF3' },
+  pricePeriod: { fontSize: '14px', color: '#8B949E' },
+  featureList: { listStyle: 'none', margin: '0 0 20px 0', padding: 0 },
   featureItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    fontSize: '13px',
-    color: '#E6EDF3',
-    marginBottom: '10px'
+    display: 'flex', alignItems: 'center', gap: '10px',
+    fontSize: '13px', color: '#E6EDF3', marginBottom: '10px',
   },
-  checkIcon: {
-    color: '#22C55E',
-    flexShrink: 0
-  },
-  moreFeatures: {
-    fontSize: '13px',
-    color: '#3B82F6',
-    marginTop: '8px'
-  },
+  checkIcon: { color: '#22C55E', flexShrink: 0 },
+  moreFeatures: { fontSize: '13px', color: '#3B82F6', marginTop: '8px' },
   selectPlanButton: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    width: '100%',
-    padding: '12px',
-    backgroundColor: '#21262D',
-    border: 'none',
-    borderRadius: '8px',
-    color: '#E6EDF3',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer'
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+    width: '100%', padding: '12px', backgroundColor: '#21262D',
+    border: 'none', borderRadius: '8px', color: '#E6EDF3',
+    fontSize: '14px', fontWeight: '500', cursor: 'pointer',
   },
-  selectPlanButtonActive: {
-    backgroundColor: '#2563EB',
-    color: 'white'
-  },
+  selectPlanButtonActive: { backgroundColor: '#2563EB', color: 'white' },
   checkoutSummary: {
-    padding: '20px',
-    backgroundColor: '#0D1117',
-    border: '1px solid #30363D',
-    borderRadius: '12px',
-    marginBottom: '20px'
+    padding: '20px', backgroundColor: '#0D1117',
+    border: '1px solid #30363D', borderRadius: '12px', marginBottom: '20px',
   },
-  checkoutTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#E6EDF3',
-    margin: '0 0 16px 0'
-  },
+  checkoutTitle: { fontSize: '16px', fontWeight: '600', color: '#E6EDF3', margin: '0 0 16px 0' },
   summaryRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '14px',
-    color: '#8B949E',
-    marginBottom: '12px'
+    display: 'flex', justifyContent: 'space-between',
+    fontSize: '14px', color: '#8B949E', marginBottom: '12px',
   },
   totalRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: '16px',
-    borderTop: '1px solid #30363D'
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: '16px', borderTop: '1px solid #30363D',
   },
-  totalAmount: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#E6EDF3'
+  totalAmount: { fontSize: '24px', fontWeight: '700', color: '#E6EDF3' },
+  billingPeriod: { fontSize: '14px', fontWeight: '400', color: '#8B949E' },
+  paymentInfo: {
+    display: 'flex', flexDirection: 'column', gap: '10px',
+    padding: '16px', backgroundColor: '#0D1117',
+    border: '1px solid #30363D', borderRadius: '10px', marginBottom: '16px',
   },
-  billingPeriod: {
-    fontSize: '14px',
-    fontWeight: '400',
-    color: '#8B949E'
-  },
-  cardForm: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-    marginBottom: '16px'
+  paymentInfoRow: {
+    display: 'flex', alignItems: 'center', gap: '10px',
+    fontSize: '13px', color: '#8B949E',
   },
   secureNotice: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 14px',
-    background: 'rgba(34, 197, 94, 0.1)',
-    border: '1px solid rgba(34, 197, 94, 0.3)',
-    borderRadius: '8px',
-    color: '#22C55E',
-    fontSize: '12px'
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px'
-  },
-  label: {
-    fontSize: '13px',
-    fontWeight: '500',
-    color: '#8B949E'
-  },
-  inputWrapper: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center'
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: '12px',
-    color: '#6E7681',
-    zIndex: 1
-  },
-  cardInput: {
-    width: '100%',
-    padding: '12px 14px 12px 40px',
-    backgroundColor: '#0D1117',
-    border: '1px solid #30363D',
-    borderRadius: '8px',
-    color: '#E6EDF3',
-    fontSize: '14px',
-    outline: 'none',
-    boxSizing: 'border-box'
-  },
-  inputError: {
-    borderColor: '#EF4444'
-  },
-  errorText: {
-    fontSize: '12px',
-    color: '#EF4444'
-  },
-  row: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '12px'
+    display: 'flex', alignItems: 'center', gap: '8px',
+    paddingTop: '10px', borderTop: '1px solid #30363D',
+    color: '#22C55E', fontSize: '12px',
   },
   disclaimer: {
-    fontSize: '11px',
-    color: '#6E7681',
-    textAlign: 'center',
-    lineHeight: 1.5,
-    marginBottom: '16px'
+    fontSize: '11px', color: '#6E7681', textAlign: 'center',
+    lineHeight: 1.5, marginBottom: '16px',
   },
-  checkoutActions: {
-    display: 'flex',
-    gap: '12px'
-  },
+  checkoutActions: { display: 'flex', gap: '12px' },
   backButton: {
-    padding: '14px 24px',
-    backgroundColor: 'transparent',
-    border: '1px solid #30363D',
-    borderRadius: '8px',
-    color: '#8B949E',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer'
+    padding: '14px 24px', backgroundColor: 'transparent',
+    border: '1px solid #30363D', borderRadius: '8px',
+    color: '#8B949E', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
   },
   payButton: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    padding: '14px',
-    backgroundColor: '#2563EB',
-    border: 'none',
-    borderRadius: '8px',
-    color: 'white',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer'
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+    padding: '14px', backgroundColor: '#2563EB', border: 'none',
+    borderRadius: '8px', color: 'white', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
   },
-  otpContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '16px',
-    padding: '24px'
-  },
-  otpTitle: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#E6EDF3',
-    margin: 0
-  },
-  otpText: {
-    fontSize: '14px',
-    color: '#8B949E',
-    margin: 0
-  },
-  otpInput: {
-    width: '200px',
-    padding: '16px',
-    background: '#0D1117',
-    border: '2px solid #30363D',
-    borderRadius: '8px',
-    color: '#E6EDF3',
-    fontSize: '24px',
-    textAlign: 'center',
-    letterSpacing: '8px',
-    outline: 'none'
-  },
-  otpActions: {
-    display: 'flex',
-    gap: '12px',
-    width: '100%',
-    maxWidth: '320px',
-    marginTop: '8px'
-  }
 };
 
 export default SubscriptionModal;
