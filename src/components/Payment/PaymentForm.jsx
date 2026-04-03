@@ -4,10 +4,10 @@
  * Card: charge → PIN → OTP → verify
  * Bank: virtual account → poll → verify
  */
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Lock, Loader2, CheckCircle, CreditCard, Building2,
-  ShieldCheck, Eye, EyeOff, Copy, ArrowLeft, ExternalLink,
+  ShieldCheck, Eye, EyeOff, ArrowLeft, ExternalLink,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabase';
@@ -253,10 +253,6 @@ const PaymentForm = ({
       setLoading(false);
       onError?.(err);
     }
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => toast.success('Copied!'));
   };
 
   const cardType = detectCard(cardNum);
