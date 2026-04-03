@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabase';
+import { useAuthStore } from '../../store';
+import { applyFeatureFlags } from '../../utils/featureFlags';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmt4(val) {
@@ -89,12 +91,13 @@ const PaymentForm = ({
 
   // ── Save to Supabase after verified ─────────────────────────────────────
   const saveSubscription = async (ref) => {
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
     if (isTrial) {
       await supabase.from('organizations').update({
         subscription_status: 'trial',
         subscription_tier: plan,
         trial_started_at: new Date().toISOString(),
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        trial_ends_at: trialEndsAt,
       }).eq('id', organizationId);
     } else {
       const now = new Date().toISOString();
@@ -108,6 +111,14 @@ const PaymentForm = ({
         subscription_status: 'active', subscription_tier: plan,
       }).eq('id', organizationId);
     }
+
+    // Immediately reflect new subscription in the in-memory auth store
+    // so ProtectedRoute and feature flags update without requiring a re-login.
+    const orgUpdates = isTrial
+      ? { subscription_status: 'trial', subscription_tier: plan, trial_ends_at: trialEndsAt }
+      : { subscription_status: 'active', subscription_tier: plan };
+    useAuthStore.getState().updateOrganization(orgUpdates);
+    applyFeatureFlags(plan);
   };
 
   // ── Verify and complete ──────────────────────────────────────────────────

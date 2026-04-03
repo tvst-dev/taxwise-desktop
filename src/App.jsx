@@ -8,6 +8,7 @@ import { loadOrganizationData, clearLocalData } from './services/dataSync';
 
 // Stores
 import { useAuthStore, useFeaturesStore } from './store';
+import { applyFeatureFlags } from './utils/featureFlags';
 
 // Layout
 import Layout from './components/Layout/Layout';
@@ -176,7 +177,7 @@ function App() {
         } : null;
 
         login(user, organization);
-        updateFeatureFlags(organization?.subscription_tier || 'startup');
+        applyFeatureFlags(organization?.subscription_tier || 'startup');
 
         const allowedStatuses = ['trial', 'active'];
         if (organization?.id && allowedStatuses.includes(organization.subscription_status)) {
@@ -194,38 +195,6 @@ function App() {
     }
   };
 
-  const updateFeatureFlags = (tier) => {
-    const { setFeature, setFeatureLimits } = useFeaturesStore.getState();
-
-    const configs = {
-      corporate: {
-        features: { posEnabled: true, multiUserEnabled: true, apiAccessEnabled: true, autoBankTrackingEnabled: true, documentAIEnabled: true },
-        limits: { maxUsers: 999, maxBankAccounts: 10, maxBranches: 999, monthlyCalculations: 99999, documentUploads: 9999 }
-      },
-      // Legacy alias
-      enterprise: {
-        features: { posEnabled: true, multiUserEnabled: true, apiAccessEnabled: true, autoBankTrackingEnabled: true, documentAIEnabled: true },
-        limits: { maxUsers: 999, maxBankAccounts: 10, maxBranches: 999, monthlyCalculations: 99999, documentUploads: 9999 }
-      },
-      sme: {
-        features: { posEnabled: true, multiUserEnabled: true, apiAccessEnabled: false, autoBankTrackingEnabled: true, documentAIEnabled: true },
-        limits: { maxUsers: 5, maxBankAccounts: 1, maxBranches: 1, monthlyCalculations: 100, documentUploads: 50 }
-      },
-      startup: {
-        features: { posEnabled: false, multiUserEnabled: false, apiAccessEnabled: false, autoBankTrackingEnabled: false, documentAIEnabled: true },
-        limits: { maxUsers: 1, maxBankAccounts: 0, maxBranches: 1, monthlyCalculations: 50, documentUploads: 10 }
-      },
-      // Legacy — map to startup
-      free: {
-        features: { posEnabled: false, multiUserEnabled: false, apiAccessEnabled: false, autoBankTrackingEnabled: false, documentAIEnabled: true },
-        limits: { maxUsers: 1, maxBankAccounts: 0, maxBranches: 1, monthlyCalculations: 50, documentUploads: 10 }
-      }
-    };
-
-    const tierConfig = configs[tier] || configs.startup;
-    Object.entries(tierConfig.features).forEach(([key, value]) => setFeature(key, value));
-    setFeatureLimits(tierConfig.limits);
-  };
 
   if (!appReady || isLoading) {
     return (
