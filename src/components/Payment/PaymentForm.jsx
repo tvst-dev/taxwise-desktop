@@ -97,6 +97,7 @@ const PaymentForm = ({
           email,
           amount: Math.round((amount || 100) * 100), // kobo
           metadata: { organization_id: organizationId, plan, is_trial: isTrial },
+          channels: method === 'bank' ? ['bank_transfer'] : ['card'],
         }),
       });
       const initData = await initRes.json();
@@ -347,7 +348,7 @@ const s = {
     background: '#0D1117', border: '1px solid #30363D', borderRadius: 8,
     color: '#E6EDF3', fontSize: 14, outline: 'none', boxSizing: 'border-box',
   },
-  inputErr: { borderColor: '#EF4444' },
+  inputErr: { border: '1px solid #EF4444' },
   errText: { fontSize: 11, color: '#EF4444' },
   cardLogo: { flexShrink: 0 },
   twoCol: { display: 'flex', gap: 12 },

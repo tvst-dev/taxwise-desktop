@@ -24,14 +24,14 @@ const CALLBACK_URL = 'http://localhost:52731';
 
 app.post('/api/init-transaction', async (req, res) => {
   try {
-    const { email, amount, metadata } = req.body;
+    const { email, amount, metadata, channels } = req.body;
     const response = await axios.post(
       'https://api.paystack.co/transaction/initialize',
       {
         email,
         amount,
         metadata: metadata || {},
-        channels: ['card', 'bank_transfer'],
+        channels: channels || ['card', 'bank_transfer'],
         callback_url: CALLBACK_URL,
       },
       {

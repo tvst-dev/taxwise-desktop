@@ -58,6 +58,7 @@ const SubscriptionModal = () => {
           email: user.email,
           amount: planData.monthlyPrice * 100, // kobo
           metadata: { organization_id: organization?.id, plan: selectedPlan },
+          channels: payMethod === 'bank' ? ['bank_transfer'] : ['card'],
         }),
       });
       const initData = await initRes.json();
