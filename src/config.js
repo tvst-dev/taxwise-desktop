@@ -15,9 +15,6 @@ const config = {
   MONO_PUBLIC_KEY: '',
   MONO_CONFIGURED: false,
 
-  // Paystack - Set public key here, secret key via Supabase CLI
-  PAYSTACK_PUBLIC_KEY: 'pk_live_05804f729a24a0bc337ba66edd6b948a3b606002',
-
   // App Info
   APP_NAME: 'TaxWise',
   APP_VERSION: '1.0.0',

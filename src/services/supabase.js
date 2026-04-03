@@ -27,7 +27,7 @@ export const signUp = async (email, password, metadata = {}) => {
     options: {
       data: metadata,
       // Redirect confirmation emails to the Electron app, not localhost:3000
-      emailRedirectTo: 'taxwise://auth/callback'
+      emailRedirectTo: 'https://taxwise.com.ng'
     }
   });
   if (error) throw error;
@@ -511,7 +511,7 @@ export const chatWithAssistant = async (messages, context = {}) => {
 
 export const resetPasswordRequest = async (email) => {
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: config.WEB_AUTH_URL || 'taxwise://auth/callback'
+    redirectTo: 'https://taxwise.com.ng'
   });
   if (error) throw error;
   return data;

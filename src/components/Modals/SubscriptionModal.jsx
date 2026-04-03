@@ -9,20 +9,7 @@ import SubscriptionService, {
   SUBSCRIPTION_PLANS,
   SUBSCRIPTION_STATUS
 } from '../../services/subscriptionService';
-import config from '../../config';
 import toast from 'react-hot-toast';
-
-// Load Paystack inline script once
-function loadPaystackScript() {
-  return new Promise((resolve, reject) => {
-    if (window.PaystackPop) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://js.paystack.co/v1/inline.js';
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('Failed to load Paystack'));
-    document.head.appendChild(s);
-  });
-}
 
 const SubscriptionModal = () => {
   const { activeModal, closeModal } = useUIStore();
@@ -55,84 +42,74 @@ const SubscriptionModal = () => {
     }
   };
 
-  // Shared fetch helper for Supabase edge function
-  const paystackFetch = async (body) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    const res = await fetch(`${config.SUPABASE_URL}/functions/v1/paystack`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': config.SUPABASE_ANON_KEY,
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok && !data.success) throw new Error(data.error || data.message || `Error (${res.status})`);
-    return data;
-  };
-
-  // Open Paystack standard popup — handles card + bank transfer
+  // Initialize payment via local Paystack proxy server and open popup
   const openPaystackPopup = async () => {
     if (!user?.email) { toast.error('Email address required for billing'); return; }
     setIsProcessing(true);
     try {
-      await loadPaystackScript();
       const planData = SUBSCRIPTION_PLANS[selectedPlan];
-      const ref = `txw_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
-      const handler = window.PaystackPop.setup({
-        key: config.PAYSTACK_PUBLIC_KEY,
-        email: user.email,
-        amount: planData.monthlyPrice * 100, // kobo
-        currency: 'NGN',
-        ref,
-        channels: ['card', 'bank_transfer'],
-        label: `TaxWise ${planData.name}`,
-        metadata: {
-          organization_id: organization?.id,
-          plan: selectedPlan,
-          custom_fields: [
-            { display_name: 'Plan', variable_name: 'plan', value: planData.name },
-            { display_name: 'Organization', variable_name: 'org_id', value: organization?.id || '' },
-          ],
-        },
-        callback: (response) => {
-          verifyAndComplete(response.reference);
-        },
-        onClose: () => {
-          setIsProcessing(false);
-        },
+      // Init transaction via local Express server (secret key stays on backend)
+      const initRes = await fetch('http://localhost:5555/api/init-transaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          amount: planData.monthlyPrice * 100, // kobo
+          metadata: { organization_id: organization?.id, plan: selectedPlan },
+        }),
       });
+      const initData = await initRes.json();
+      if (!initData.status) throw new Error(initData.error || 'Failed to initialize payment');
 
-      handler.openIframe();
+      // Open Paystack checkout in Electron BrowserWindow popup
+      const result = await window.electronAPI.payment.openPopup(initData.authUrl);
+      if (!result.success) throw new Error(result.error || 'Payment cancelled');
+
+      // Verify and activate subscription
+      await verifyAndComplete(result.reference || initData.reference);
     } catch (error) {
-      toast.error(error.message || 'Could not open payment. Please try again.');
+      toast.error(error.message || 'Payment failed. Please try again.');
       setIsProcessing(false);
     }
   };
 
-  // Verify reference with Supabase edge function and activate subscription
+  // Verify via local server and activate subscription in Supabase
   const verifyAndComplete = async (reference) => {
     setIsProcessing(true);
     try {
-      const data = await paystackFetch({
-        action: 'verify',
-        reference,
-        organization_id: organization?.id,
-        plan: selectedPlan,
-        is_trial: false,
-      });
-      if (data.success) {
-        setView('success');
-        toast.success('Subscription activated!');
-        await loadSubscription();
-      } else {
-        throw new Error(data.error || 'Verification failed');
+      // Verify payment via local proxy server
+      const verifyRes = await fetch(`http://localhost:5555/api/verify/${reference}`);
+      const verifyData = await verifyRes.json();
+
+      if (verifyData.data?.status !== 'success') {
+        throw new Error('Payment not confirmed. Please try again or contact support.');
       }
+
+      const now = new Date().toISOString();
+      const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Record subscription in Supabase
+      await supabase.from('subscriptions').upsert({
+        organization_id: organization.id,
+        plan: selectedPlan,
+        status: 'active',
+        paystack_reference: reference,
+        current_period_start: now,
+        current_period_end: periodEnd,
+      }, { onConflict: 'organization_id' });
+
+      // Update organization status
+      await supabase.from('organizations').update({
+        subscription_status: 'active',
+        subscription_tier: selectedPlan,
+      }).eq('id', organization.id);
+
+      setView('success');
+      toast.success('Subscription activated!');
+      await loadSubscription();
     } catch (error) {
-      toast.error(error.message || 'Payment verification failed. Contact support if you were charged.');
+      toast.error(error.message || 'Verification failed. Contact support if you were charged.');
     } finally {
       setIsProcessing(false);
     }

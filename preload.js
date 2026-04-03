@@ -94,16 +94,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
     install: () => ipcRenderer.invoke('updates:install')
   },
 
-  // Secure Paystack operations
-  paystack: {
-    hasSecretKey: () => ipcRenderer.invoke('paystack:hasSecretKey'),
-    setKeys: (keys) => ipcRenderer.invoke('paystack:setKeys', keys),
-    removeKeys: () => ipcRenderer.invoke('paystack:removeKeys'),
-    getPublicKey: () => ipcRenderer.invoke('paystack:getPublicKey'),
-    initializeTransaction: (data) => ipcRenderer.invoke('paystack:initializeTransaction', data),
-    verifyTransaction: (reference) => ipcRenderer.invoke('paystack:verifyTransaction', reference),
-    createSubscription: (data) => ipcRenderer.invoke('paystack:createSubscription', data),
-    getSubscription: (code) => ipcRenderer.invoke('paystack:getSubscription', code),
-    cancelSubscription: (code, token) => ipcRenderer.invoke('paystack:cancelSubscription', { code, token })
-  }
 });

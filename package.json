@@ -41,6 +41,7 @@
       "dist/**/*",
       "main.js",
       "preload.js",
+      "server.js",
       "database/**/*",
       "node_modules/sql.js/dist/**/*",
       "package.json"
@@ -49,6 +50,10 @@
       {
         "from": "node_modules/sql.js/dist/sql-wasm.wasm",
         "to": "sql-wasm.wasm"
+      },
+      {
+        "from": ".env",
+        "to": ".env"
       }
     ],
     "protocols": [
@@ -103,9 +108,11 @@
     "crypto-js": "^4.1.1",
     "date-fns": "^2.30.0",
     "docx": "^8.2.0",
+    "dotenv": "^16.6.1",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.8.3",
     "exceljs": "^4.3.0",
+    "express": "^4.22.1",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.6.0",
     "lucide-react": "^0.263.1",

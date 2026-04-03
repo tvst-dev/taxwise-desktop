@@ -3,6 +3,20 @@ const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
+// ─── Paystack proxy server ───────────────────────────────────────────────────
+// Resolve .env path: outside ASAR in production (extraResources), beside main.js in dev.
+function startPaystackServer() {
+  try {
+    const envPath = app.isPackaged
+      ? path.join(process.resourcesPath, '.env')
+      : path.join(__dirname, '.env');
+    process.env.DOTENV_PATH = envPath;
+    require('./server');
+  } catch (err) {
+    console.error('[paystack-server] Failed to start:', err.message);
+  }
+}
+
 // Disable GPU acceleration to prevent GPU process errors on some Windows machines
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
@@ -191,6 +205,7 @@ function saveDatabase() {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  startPaystackServer();
   await initializeDatabase();
   createWindow();
 
