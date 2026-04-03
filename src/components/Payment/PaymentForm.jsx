@@ -4,10 +4,10 @@
  * Card: charge → PIN → OTP → verify
  * Bank: virtual account → poll → verify
  */
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Lock, Loader2, CheckCircle, CreditCard, Building2,
-  ShieldCheck, Eye, EyeOff, Copy, RefreshCw, ArrowLeft,
+  ShieldCheck, Eye, EyeOff, Copy, ArrowLeft, ExternalLink,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../services/supabase';
@@ -79,11 +79,9 @@ const PaymentForm = ({
   const [otp, setOtp] = useState('');
 
   // Payment state
-  const [reference, setReference]   = useState('');
-  const [bankInfo, setBankInfo]      = useState(null);
-  const [statusMsg, setStatusMsg]    = useState('');
-  const [loading, setLoading]        = useState(false);
-  const [transferDone, setTransferDone] = useState(false);
+  const [reference, setReference] = useState('');
+  const [statusMsg, setStatusMsg] = useState(''); // OTP hint text or 3DS URL
+  const [loading, setLoading]     = useState(false);
 
   const pollRef = useRef(null);
 
@@ -126,11 +124,11 @@ const PaymentForm = ({
     } catch (err) {
       toast.error(err.message);
       setLoading(false);
-      setStep(method === 'bank' ? 'bank' : 'card');
+      setStep('card');
     }
   };
 
-  // ── Handle charge response (card + bank share this) ──────────────────────
+  // ── Handle charge response (card only) ───────────────────────────────────
   const handleChargeResponse = (data, ref) => {
     setReference(ref);
     const s = data?.data?.status;
@@ -143,24 +141,9 @@ const PaymentForm = ({
       setStatusMsg(data.data.display_text || 'Enter the OTP sent to your phone/email');
       setOtp(''); setStep('otp'); setLoading(false); return;
     }
-    if (s === 'pay_offline' || s === 'pending') {
-      // Bank transfer — extract account details
-      const td = data.data?.metadata?.transfer_details
-        || data.data?.transfer_details
-        || data.data;
-      setBankInfo({
-        bank_name:      td.bank_name  || td.bank?.name        || 'Paystack Bank',
-        account_number: td.account_number || td.bank?.account_number || '—',
-        account_name:   td.account_name  || td.bank?.account_name   || 'TaxWise',
-      });
-      setStep('bank'); setLoading(false);
-      startPolling(ref);
-      return;
-    }
     if (s === 'open_url') {
-      // 3DS — open in browser, poll for result
-      window.electronAPI?.shell?.openExternal(data.data.url);
-      setStatusMsg('Complete the bank authentication in your browser. This screen will update automatically.');
+      // 3DS — store URL, show manual open button + poll (don't auto-open)
+      setStatusMsg(data.data.url);
       setStep('otp'); setOtp('__3ds__'); setLoading(false);
       startPolling(ref);
       return;
@@ -247,21 +230,26 @@ const PaymentForm = ({
     }
   };
 
-  // ── Bank transfer init ───────────────────────────────────────────────────
+  // ── Bank transfer — opens Paystack virtual account page in popup window ──
   const handleBankTransfer = async () => {
     setLoading(true);
     try {
-      const data = await api('/api/init-bank-transfer', {
+      // Initialize a bank-transfer-only transaction via server
+      const data = await api('/api/init-transaction', {
         email,
         amount: Math.round(amount * 100),
         metadata: { organization_id: organizationId, plan, is_trial: isTrial },
+        channels: ['bank_transfer'],
       });
-      if (!data.status && data.data?.status !== 'pending' && data.data?.status !== 'pay_offline') {
-        throw new Error(data.message || 'Could not get account details');
-      }
-      handleChargeResponse(data, data.data?.reference);
+      if (!data.status) throw new Error(data.error || 'Could not initialize bank transfer');
+
+      // Open Paystack virtual account page in Electron popup window
+      const result = await window.electronAPI.payment.openPopup(data.authUrl);
+      if (!result.success) throw new Error(result.error || 'Transfer cancelled');
+
+      await finalize(result.reference || data.reference);
     } catch (err) {
-      toast.error(err.message || 'Bank transfer init failed. Please try again.');
+      toast.error(err.message || 'Bank transfer failed. Please try again.');
       setLoading(false);
       onError?.(err);
     }
@@ -291,66 +279,6 @@ const PaymentForm = ({
         <Loader2 size={44} color="#3B82F6" style={s.spin} />
         <h3 style={s.h3}>Confirming payment…</h3>
         <p style={s.muted}>Please wait while we verify your payment.</p>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      </div>
-    );
-  }
-
-  if (step === 'bank' && bankInfo) {
-    return (
-      <div style={s.col}>
-        <div style={s.secureBar}><ShieldCheck size={13}/><span>Secured by Paystack · Expires in 30 minutes</span></div>
-
-        <div style={s.bankCard}>
-          <div style={s.bankCardHeader}>
-            <Building2 size={18} color="#60A5FA"/>
-            <span style={s.bankCardTitle}>Transfer to this account</span>
-          </div>
-
-          <div style={s.bankRow}>
-            <span style={s.bankLabel}>Bank</span>
-            <span style={s.bankValue}>{bankInfo.bank_name}</span>
-          </div>
-          <div style={s.bankRow}>
-            <span style={s.bankLabel}>Account Number</span>
-            <div style={s.bankValueRow}>
-              <span style={{ ...s.bankValue, fontFamily: 'monospace', letterSpacing: 2 }}>{bankInfo.account_number}</span>
-              <button style={s.copyBtn} onClick={() => copyToClipboard(bankInfo.account_number)}><Copy size={13}/></button>
-            </div>
-          </div>
-          <div style={s.bankRow}>
-            <span style={s.bankLabel}>Account Name</span>
-            <span style={s.bankValue}>{bankInfo.account_name}</span>
-          </div>
-          <div style={{ ...s.bankRow, borderTop: '1px solid #30363D', paddingTop: 12, marginTop: 4 }}>
-            <span style={s.bankLabel}>Amount</span>
-            <span style={{ ...s.bankValue, color: '#22C55E', fontWeight: 700 }}>
-              ₦{amount.toLocaleString()}
-            </span>
-          </div>
-        </div>
-
-        <div style={s.bankPending}>
-          <Loader2 size={14} color="#F59E0B" style={s.spin}/>
-          <span style={{ color: '#F59E0B', fontSize: 13 }}>
-            {transferDone ? 'Verifying your transfer…' : 'Waiting for your transfer…'}
-          </span>
-        </div>
-
-        <button
-          style={{ ...s.btn, background: '#16a34a', marginTop: 4 }}
-          onClick={() => { setTransferDone(true); finalize(reference); }}
-        >
-          <CheckCircle size={15}/> I've made the transfer
-        </button>
-
-        <button style={s.btnGhost} onClick={() => setStep('method')}>
-          <ArrowLeft size={14}/> Back
-        </button>
-
-        <p style={s.disclaimer}>
-          Transfer the exact amount. Payments are confirmed automatically — this may take up to 5 minutes.
-        </p>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     );
@@ -400,7 +328,15 @@ const PaymentForm = ({
           <p style={s.muted}>{statusMsg}</p>
         </div>
 
-        {!is3ds && (
+        {is3ds ? (
+          <button
+            type="button"
+            style={{ ...s.btn, background: '#1d4ed8' }}
+            onClick={() => window.electronAPI?.shell?.openExternal(statusMsg)}
+          >
+            <ExternalLink size={15}/> Open Authentication Page
+          </button>
+        ) : (
           <div style={s.field}>
             <label style={s.label}>One-Time Password</label>
             <input
