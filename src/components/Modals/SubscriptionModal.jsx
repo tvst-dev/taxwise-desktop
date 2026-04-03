@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Check, Lock,
-  Calendar, RefreshCw, ChevronRight, CreditCard
+  Calendar, RefreshCw, ChevronRight, CreditCard, Building2
 } from 'lucide-react';
 import { useUIStore, useAuthStore } from '../../store';
 import { supabase } from '../../services/supabase';
@@ -20,6 +20,7 @@ const SubscriptionModal = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [view, setView] = useState('plans'); // 'plans' | 'checkout' | 'success'
+  const [payMethod, setPayMethod] = useState('card'); // 'card' | 'bank'
 
   const isOpen = activeModal === 'subscription';
 
@@ -181,7 +182,7 @@ const SubscriptionModal = () => {
             <div style={styles.checkoutSummary}>
               <h3 style={styles.checkoutTitle}>Order Summary</h3>
               <div style={styles.summaryRow}>
-                <span>{selectedPlanData.name}</span>
+                <span>{selectedPlanData.name} Plan</span>
                 <span>{formatPrice(selectedPlanData.monthlyPrice)}</span>
               </div>
               <div style={styles.summaryRow}>
@@ -197,21 +198,53 @@ const SubscriptionModal = () => {
               </div>
             </div>
 
-            {/* Payment method info */}
-            <div style={styles.paymentInfo}>
-              <div style={styles.paymentInfoRow}>
-                <CreditCard size={16} style={{ color: '#22C55E', flexShrink: 0 }} />
-                <span>Card payment (Visa, Mastercard, Verve)</span>
-              </div>
-              <div style={styles.paymentInfoRow}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M7 8V6a5 5 0 0 1 10 0v2"/></svg>
-                <span>Bank transfer (pay directly from your bank)</span>
-              </div>
-              <div style={styles.secureNotice}>
-                <Lock size={13} />
-                <span>Secured by Paystack · PCI DSS compliant</span>
-              </div>
+            {/* Payment method tabs */}
+            <div style={styles.methodTabs}>
+              <button
+                type="button"
+                style={{ ...styles.methodTab, ...(payMethod === 'card' ? styles.methodTabActive : {}) }}
+                onClick={() => setPayMethod('card')}
+              >
+                <CreditCard size={15} />
+                <span>Debit / Credit Card</span>
+              </button>
+              <button
+                type="button"
+                style={{ ...styles.methodTab, ...(payMethod === 'bank' ? styles.methodTabActive : {}) }}
+                onClick={() => setPayMethod('bank')}
+              >
+                <Building2 size={15} />
+                <span>Bank Transfer</span>
+              </button>
             </div>
+
+            {/* Card method detail */}
+            {payMethod === 'card' && (
+              <div style={styles.methodDetail}>
+                <div style={styles.paymentInfoRow}>
+                  <CreditCard size={15} style={{ color: '#60A5FA', flexShrink: 0 }} />
+                  <span>Visa, Mastercard, and Verve cards accepted</span>
+                </div>
+                <div style={styles.paymentInfoRow}>
+                  <Lock size={15} style={{ color: '#22C55E', flexShrink: 0 }} />
+                  <span>256-bit encrypted · PCI DSS compliant · Powered by Paystack</span>
+                </div>
+              </div>
+            )}
+
+            {/* Bank transfer method detail */}
+            {payMethod === 'bank' && (
+              <div style={styles.methodDetail}>
+                <div style={styles.paymentInfoRow}>
+                  <Building2 size={15} style={{ color: '#60A5FA', flexShrink: 0 }} />
+                  <span>A unique virtual account will be generated for this payment</span>
+                </div>
+                <div style={styles.paymentInfoRow}>
+                  <Check size={15} style={{ color: '#22C55E', flexShrink: 0 }} />
+                  <span>Access is activated instantly after bank confirmation</span>
+                </div>
+              </div>
+            )}
 
             <div style={styles.disclaimer}>
               Your subscription renews automatically each month. You can cancel anytime.
@@ -228,6 +261,8 @@ const SubscriptionModal = () => {
               >
                 {isProcessing ? (
                   <><RefreshCw size={16} className="spin" /> Opening payment…</>
+                ) : payMethod === 'bank' ? (
+                  <><Building2 size={15} /> Continue to Bank Transfer</>
                 ) : (
                   <><Lock size={15} /> Pay {formatPrice(selectedPlanData.monthlyPrice)}</>
                 )}
@@ -462,19 +497,23 @@ const styles = {
   },
   totalAmount: { fontSize: '24px', fontWeight: '700', color: '#E6EDF3' },
   billingPeriod: { fontSize: '14px', fontWeight: '400', color: '#8B949E' },
-  paymentInfo: {
+  methodTabs: { display: 'flex', gap: '8px', marginBottom: '4px' },
+  methodTab: {
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+    padding: '10px', backgroundColor: '#0D1117', border: '1px solid #30363D',
+    borderRadius: '8px', color: '#8B949E', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+  },
+  methodTabActive: {
+    backgroundColor: 'rgba(37,99,235,0.1)', borderColor: '#2563EB', color: '#60A5FA',
+  },
+  methodDetail: {
     display: 'flex', flexDirection: 'column', gap: '10px',
-    padding: '16px', backgroundColor: '#0D1117',
-    border: '1px solid #30363D', borderRadius: '10px', marginBottom: '16px',
+    padding: '14px 16px', backgroundColor: '#0D1117',
+    border: '1px solid #30363D', borderRadius: '10px', marginBottom: '4px',
   },
   paymentInfoRow: {
     display: 'flex', alignItems: 'center', gap: '10px',
     fontSize: '13px', color: '#8B949E',
-  },
-  secureNotice: {
-    display: 'flex', alignItems: 'center', gap: '8px',
-    paddingTop: '10px', borderTop: '1px solid #30363D',
-    color: '#22C55E', fontSize: '12px',
   },
   disclaimer: {
     fontSize: '11px', color: '#6E7681', textAlign: 'center',
