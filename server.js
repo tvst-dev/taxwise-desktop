@@ -68,6 +68,71 @@ app.get('/api/verify/:reference', async (req, res) => {
   }
 });
 
+// Charge card directly (server-side, no popup)
+app.post('/api/charge-card', async (req, res) => {
+  try {
+    const { email, amount, card, metadata } = req.body;
+    const response = await axios.post(
+      'https://api.paystack.co/charge',
+      { email, amount, card, metadata: metadata || {} },
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, 'Content-Type': 'application/json' } }
+    );
+    return res.json(response.data);
+  } catch (err) {
+    console.error('[paystack] charge-card error:', err.response?.data || err.message);
+    return res.status(500).json({ status: false, message: err.response?.data?.message || err.message });
+  }
+});
+
+// Submit card PIN
+app.post('/api/submit-pin', async (req, res) => {
+  try {
+    const { reference, pin } = req.body;
+    const response = await axios.post(
+      'https://api.paystack.co/charge/submit_pin',
+      { reference, pin },
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, 'Content-Type': 'application/json' } }
+    );
+    return res.json(response.data);
+  } catch (err) {
+    console.error('[paystack] submit-pin error:', err.response?.data || err.message);
+    return res.status(500).json({ status: false, message: err.response?.data?.message || err.message });
+  }
+});
+
+// Submit OTP
+app.post('/api/submit-otp', async (req, res) => {
+  try {
+    const { reference, otp } = req.body;
+    const response = await axios.post(
+      'https://api.paystack.co/charge/submit_otp',
+      { reference, otp },
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, 'Content-Type': 'application/json' } }
+    );
+    return res.json(response.data);
+  } catch (err) {
+    console.error('[paystack] submit-otp error:', err.response?.data || err.message);
+    return res.status(500).json({ status: false, message: err.response?.data?.message || err.message });
+  }
+});
+
+// Initialize bank transfer — returns virtual account details
+app.post('/api/init-bank-transfer', async (req, res) => {
+  try {
+    const { email, amount, metadata } = req.body;
+    const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 min
+    const response = await axios.post(
+      'https://api.paystack.co/charge',
+      { email, amount, bank_transfer: { account_expires_at: expires }, metadata: metadata || {} },
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, 'Content-Type': 'application/json' } }
+    );
+    return res.json(response.data);
+  } catch (err) {
+    console.error('[paystack] init-bank-transfer error:', err.response?.data || err.message);
+    return res.status(500).json({ status: false, message: err.response?.data?.message || err.message });
+  }
+});
+
 app.post('/api/subscribe', async (req, res) => {
   try {
     const { email, plan } = req.body;
