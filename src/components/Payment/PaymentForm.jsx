@@ -84,6 +84,7 @@ const PaymentForm = ({
   const [reference, setReference] = useState('');
   const [statusMsg, setStatusMsg] = useState(''); // OTP hint text or 3DS URL
   const [loading, setLoading]     = useState(false);
+  const [bankDetails, setBankDetails] = useState(null);
 
   const pollRef = useRef(null);
 
@@ -135,7 +136,8 @@ const PaymentForm = ({
     } catch (err) {
       toast.error(err.message);
       setLoading(false);
-      setStep('card');
+      // Return to the right step based on payment method
+      setStep(method === 'bank' ? 'bank' : 'card');
     }
   };
 
@@ -241,24 +243,30 @@ const PaymentForm = ({
     }
   };
 
-  // ── Bank transfer — opens Paystack virtual account page in popup window ──
+  // ── Bank transfer — fully inline, no popup ──────────────────────────────
   const handleBankTransfer = async () => {
     setLoading(true);
     try {
-      // Initialize a bank-transfer-only transaction via server
-      const data = await api('/api/init-transaction', {
+      const data = await api('/api/init-bank-transfer', {
         email,
         amount: Math.round(amount * 100),
         metadata: { organization_id: organizationId, plan, is_trial: isTrial },
-        channels: ['bank_transfer'],
       });
-      if (!data.status) throw new Error(data.error || 'Could not initialize bank transfer');
+      if (!data.status || !data.data) throw new Error(data.message || 'Could not initialize bank transfer');
+      const d = data.data;
+      if (d.status !== 'pay_offline') throw new Error(d.display_text || 'Bank transfer unavailable. Please try a card.');
 
-      // Open Paystack virtual account page in Electron popup window
-      const result = await window.electronAPI.payment.openPopup(data.authUrl);
-      if (!result.success) throw new Error(result.error || 'Transfer cancelled');
-
-      await finalize(result.reference || data.reference);
+      const ref = d.reference;
+      setBankDetails({
+        accountNumber: d.bank?.account_number || '',
+        bankName:      d.bank?.name           || '',
+        amount:        d.bank?.amount ? d.bank.amount / 100 : amount,
+        displayText:   d.display_text || '',
+      });
+      setReference(ref);
+      setStep('bank');
+      setLoading(false);
+      startPolling(ref);
     } catch (err) {
       toast.error(err.message || 'Bank transfer failed. Please try again.');
       setLoading(false);
@@ -472,6 +480,67 @@ const PaymentForm = ({
         </p>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </form>
+    );
+  }
+
+  // ── Bank transfer waiting screen ────────────────────────────────────────
+  if (step === 'bank') {
+    const acct = bankDetails?.accountNumber;
+    return (
+      <div style={s.col}>
+        <div style={s.bankCard}>
+          <div style={s.bankCardHeader}>
+            <Building2 size={18} color="#3B82F6"/>
+            <span style={s.bankCardTitle}>Transfer to this account</span>
+          </div>
+
+          {bankDetails?.bankName ? (
+            <div style={s.bankRow}>
+              <span style={s.bankLabel}>Bank</span>
+              <span style={s.bankValue}>{bankDetails.bankName}</span>
+            </div>
+          ) : null}
+
+          <div style={s.bankRow}>
+            <span style={s.bankLabel}>Account Number</span>
+            <div style={s.bankValueRow}>
+              <span style={{ ...s.bankValue, fontSize: 20, letterSpacing: 2 }}>{acct || '—'}</span>
+              {acct && (
+                <button style={s.copyBtn} onClick={() => { navigator.clipboard.writeText(acct); toast.success('Copied!'); }}>
+                  Copy
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={s.bankRow}>
+            <span style={s.bankLabel}>Amount</span>
+            <span style={{ ...s.bankValue, color: '#22C55E' }}>₦{bankDetails?.amount?.toLocaleString()}</span>
+          </div>
+
+          {bankDetails?.displayText ? (
+            <p style={{ fontSize: 12, color: '#6E7681', margin: 0, lineHeight: 1.5 }}>
+              {bankDetails.displayText}
+            </p>
+          ) : null}
+
+          <div style={s.bankPending}>
+            <Loader2 size={14} color="#F59E0B" style={s.spin}/>
+            <span style={{ fontSize: 12, color: '#F59E0B' }}>
+              Waiting for transfer… this page updates automatically.
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          style={s.btnGhost}
+          onClick={() => { clearInterval(pollRef.current); setStep('method'); setLoading(false); }}
+        >
+          <ArrowLeft size={14}/> Cancel
+        </button>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
     );
   }
 
