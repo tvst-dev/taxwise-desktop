@@ -269,9 +269,9 @@ app.whenReady().then(async () => {
   });
 });
 
-// IPC: open Paystack payment popup — works with all card types worldwide
-// Intercepts Paystack's redirect to our local callback URL to capture the reference
+// IPC: open Paystack payment popup
 const PAYMENT_CALLBACK_HOST = 'localhost:52731';
+let activePayWin = null; // allow renderer to close it programmatically
 
 ipcMain.handle('payment:openPopup', async (event, { authorizationUrl }) => {
   return new Promise((resolve) => {
@@ -288,17 +288,19 @@ ipcMain.handle('payment:openPopup', async (event, { authorizationUrl }) => {
       autoHideMenuBar: true,
     });
 
+    activePayWin = payWin;
     payWin.loadURL(authorizationUrl);
 
     let settled = false;
     const settle = (result) => {
       if (settled) return;
       settled = true;
+      activePayWin = null;
       if (!payWin.isDestroyed()) payWin.destroy();
       resolve(result);
     };
 
-    // Paystack redirects to callback_url after payment — intercept before it tries to load
+    // Paystack redirects to callback_url after card payment
     payWin.webContents.on('will-redirect', (e, url) => {
       if (url.includes(PAYMENT_CALLBACK_HOST)) {
         e.preventDefault();
@@ -324,6 +326,13 @@ ipcMain.handle('payment:openPopup', async (event, { authorizationUrl }) => {
     // User closed the window manually
     payWin.on('closed', () => settle({ success: false, error: 'Payment cancelled' }));
   });
+});
+
+// IPC: close the active payment popup from renderer (used after poll confirms bank transfer)
+ipcMain.handle('payment:closePopup', () => {
+  if (activePayWin && !activePayWin.isDestroyed()) {
+    activePayWin.close();
+  }
 });
 
 // IPC: manual update check from renderer
