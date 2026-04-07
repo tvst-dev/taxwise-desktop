@@ -242,9 +242,6 @@ const PaymentForm = ({
   };
 
   // ── Bank transfer — Paystack popup + background polling ─────────────────
-  // The popup shows Paystack's virtual account page so the user can transfer.
-  // We poll every 5s in the background; when payment is confirmed we close the
-  // popup programmatically and finalize — no more blank-page hang.
   const handleBankTransfer = async () => {
     setLoading(true);
     try {
@@ -254,36 +251,50 @@ const PaymentForm = ({
         metadata: { organization_id: organizationId, plan, is_trial: isTrial },
         channels: ['bank_transfer'],
       });
+
       if (!data.status) throw new Error(data.error || 'Could not initialize bank transfer');
+      if (!data.authUrl)  throw new Error('No payment URL returned by Paystack. Please try again.');
 
       const ref = data.reference;
       setLoading(false);
 
-      // Open popup (don't await — it resolves when the window closes)
-      // If the user closes it before we detect payment, we do one final check.
-      window.electronAPI.payment.openPopup(data.authUrl).then(async (result) => {
-        clearInterval(pollRef.current);
-        if (!result.success) {
-          // Popup was closed manually — check one last time before giving up
+      // Flags to prevent double-finalize
+      let paymentConfirmed = false;
+      let popupClosed      = false;
+
+      // Open popup — fire-and-forget (don't await; resolves when window closes)
+      window.electronAPI.payment.openPopup(data.authUrl)
+        .then(async () => {
+          popupClosed = true;
+          clearInterval(pollRef.current);
+          if (paymentConfirmed) return; // poll already handled it
+          // One last verify before giving up
           try {
             const check = await api(`/api/verify/${ref}`);
-            if (check.data?.status === 'success') { finalize(ref); return; }
+            if (check.data?.status === 'success') { await finalize(ref); return; }
           } catch {}
           toast.error('Transfer cancelled or not yet confirmed.');
           setLoading(false);
-        }
-        // If result.success = true the poll already called finalize, nothing more to do
-      });
+        })
+        .catch((err) => {
+          console.error('[bank-transfer] popup error:', err);
+          clearInterval(pollRef.current);
+          toast.error('Could not open payment window. Please try again.');
+          setLoading(false);
+        });
 
-      // Poll silently; when payment confirmed → close popup → finalize
+      // Background poll — when payment confirmed, close popup then finalize
       let attempts = 0;
       pollRef.current = setInterval(async () => {
-        if (++attempts > 72) { clearInterval(pollRef.current); return; } // 6 min
+        if (++attempts > 72) { clearInterval(pollRef.current); return; } // 6 min timeout
         try {
           const d = await api(`/api/verify/${ref}`);
           if (d.data?.status === 'success') {
+            paymentConfirmed = true;
             clearInterval(pollRef.current);
-            await window.electronAPI.payment.closePopup(); // close the popup
+            if (!popupClosed) {
+              await window.electronAPI.payment.closePopup();
+            }
             await finalize(ref);
           }
         } catch {}

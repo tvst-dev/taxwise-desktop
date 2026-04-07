@@ -41,11 +41,13 @@ app.post('/api/init-transaction', async (req, res) => {
         },
       }
     );
+    const txData = response.data.data;
+    console.log('[paystack] init-transaction ok, authUrl:', txData.authorization_url, 'ref:', txData.reference);
     return res.json({
       status: true,
-      authUrl: response.data.data.authorization_url,
-      accessCode: response.data.data.access_code,
-      reference: response.data.data.reference,
+      authUrl: txData.authorization_url,
+      accessCode: txData.access_code,
+      reference: txData.reference,
     });
   } catch (err) {
     console.error('[paystack] init-transaction error:', err.response?.data || err.message);
