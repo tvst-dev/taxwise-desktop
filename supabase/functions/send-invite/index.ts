@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     // #access_token=...&refresh_token=...&type=invite appended.
     // taxwise.com.ng/index.html already handles the full invite auth flow (set password + deep link).
     // This URL must be in Supabase Dashboard → Auth → URL Configuration → Redirect URLs.
-    const webAcceptUrl = 'https://taxwise.com.ng';
+    const webAcceptUrl = 'https://www.taxwise.com.ng';
 
     // Generate the invite link (does NOT send an email — we send it ourselves)
     let { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
