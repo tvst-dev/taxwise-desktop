@@ -22,6 +22,13 @@ const ExportModal = () => {
 
   const isOpen = activeModal === 'export';
 
+  // Sync exportType when modal opens with a pre-selected type
+  React.useEffect(() => {
+    if (isOpen && modalData?.exportType) {
+      setExportType(modalData.exportType);
+    }
+  }, [isOpen]);
+
   const exportTypes = [
     { id: 'transactions', name: 'All Transactions', description: 'Includes income, expenses, and transfers' },
     { id: 'tax_calculations', name: 'Tax Calculations', description: 'PAYE, VAT, CIT, WHT calculations' },

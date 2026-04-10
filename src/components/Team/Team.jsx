@@ -1,21 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, Search, Mail, Shield, Edit2, Trash2,
   Crown, Check, X, AlertCircle, UserPlus,
   Clock, RefreshCw, ChevronDown
 } from 'lucide-react';
 import { useTeamStore, useFeaturesStore, useAuthStore } from '../../store';
-import { inviteTeamMember, sendTeamInvite, cancelInvitation } from '../../services/supabase';
+import { inviteTeamMember, sendTeamInvite, cancelInvitation, getInvitations } from '../../services/supabase';
 import toast from 'react-hot-toast';
 
 const Team = () => {
   const { user, organization } = useAuthStore();
   const { multiUserEnabled, featureLimits } = useFeaturesStore();
-  const { 
-    members, invitations, 
+  const {
+    members, invitations,
     addMember, updateMember, removeMember,
-    addInvitation, removeInvitation 
+    addInvitation, removeInvitation, setInvitations
   } = useTeamStore();
+
+  // Refresh invitations from Supabase on mount so accepted invites don't show as pending
+  useEffect(() => {
+    if (!organization?.id) return;
+    getInvitations(organization.id)
+      .then((fresh) => setInvitations(fresh))
+      .catch((e) => console.warn('Could not refresh invitations:', e.message));
+  }, [organization?.id]);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);

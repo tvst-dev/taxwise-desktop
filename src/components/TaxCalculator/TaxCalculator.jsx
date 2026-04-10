@@ -46,6 +46,7 @@ const TaxCalculator = () => {
   const [companyCategory, setCompanyCategory] = useState('medium');
   const [isCalculating, setIsCalculating] = useState(false);
   const [result, setResult] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Calculate totals from entries for the selected fiscal year
   const entrySummary = React.useMemo(() => {
@@ -340,7 +341,7 @@ const TaxCalculator = () => {
       toast.error('Please calculate first');
       return;
     }
-    openModal('exportTaxReport', { result, taxType, fiscalYear });
+    openModal('export', { exportType: 'tax_calculations' });
   };
 
   const handleSaveCalculation = async () => {
@@ -716,7 +717,7 @@ const TaxCalculator = () => {
           <span style={styles.breadcrumbCurrent}>Tax Calculator</span>
         </div>
         <div style={styles.headerActions}>
-          <button style={styles.helpBtn}>
+          <button style={styles.helpBtn} onClick={() => setShowHelp(true)}>
             <HelpCircle size={18} />
             Help
           </button>
@@ -994,8 +995,152 @@ const TaxCalculator = () => {
           </div>
         </div>
       </div>
+
+      {/* Help Modal */}
+      {showHelp && (
+        <div style={helpStyles.overlay} onClick={() => setShowHelp(false)}>
+          <div style={helpStyles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={helpStyles.header}>
+              <div style={helpStyles.headerTitle}>
+                <HelpCircle size={20} color="#2563EB" />
+                <h2 style={helpStyles.title}>Tax Calculator Help</h2>
+              </div>
+              <button style={helpStyles.closeBtn} onClick={() => setShowHelp(false)}>
+                <span style={{ fontSize: '20px', lineHeight: 1 }}>×</span>
+              </button>
+            </div>
+            <div style={helpStyles.body}>
+
+              <div style={helpStyles.section}>
+                <h3 style={helpStyles.sectionTitle}>How to Use the Calculator</h3>
+                <ol style={helpStyles.orderedList}>
+                  <li>Select your <strong>Tax Type</strong> from the dropdown (PAYE, CIT, VAT, or WHT).</li>
+                  <li>Choose the <strong>Fiscal Year</strong> for the calculation.</li>
+                  <li>Fill in the required fields, or click <strong>"From Entries"</strong> to auto-populate from your recorded income and expenses.</li>
+                  <li>Click <strong>"Calculate Tax"</strong> to see your estimated tax liability.</li>
+                  <li>Use <strong>"Save to History"</strong> to keep a record, or <strong>"Export Report"</strong> to download the results.</li>
+                </ol>
+              </div>
+
+              <div style={helpStyles.section}>
+                <h3 style={helpStyles.sectionTitle}>Tax Types Explained</h3>
+                <div style={helpStyles.taxGrid}>
+                  <div style={helpStyles.taxCard}>
+                    <div style={helpStyles.taxCardTitle}>PAYE — Personal Income Tax</div>
+                    <p style={helpStyles.taxCardText}>
+                      Pay As You Earn applies to employees and sole traders. Enter your monthly salary components (basic, housing, transport, other allowances). The calculator derives annual gross, applies the CRA (Consolidated Relief Allowance), and computes tax using the graduated rates under the Personal Income Tax Act (PITA).
+                    </p>
+                    <div style={helpStyles.taxCardNote}>CRA = Higher of ₦200,000 or 1% of gross + 20% of gross income</div>
+                  </div>
+                  <div style={helpStyles.taxCard}>
+                    <div style={helpStyles.taxCardTitle}>CIT — Company Income Tax</div>
+                    <p style={helpStyles.taxCardText}>
+                      Applies to limited liability companies and PLCs. Enter your total revenue, allowable expenses, capital allowances, and annual turnover. The rate depends on company size: Small (≤₦25m turnover) = 0%, Medium (₦25m–₦100m) = 20%, Large (&gt;₦100m) = 30%. Education Tax (TETFund) of 2.5% applies on assessable profits.
+                    </p>
+                  </div>
+                  <div style={helpStyles.taxCard}>
+                    <div style={helpStyles.taxCardTitle}>VAT — Value Added Tax</div>
+                    <p style={helpStyles.taxCardText}>
+                      Nigeria's VAT rate is 7.5% (Finance Act 2020). Enter your VATable sales (output VAT) and VATable purchases (input VAT). Any excess input VAT can be carried forward. VAT returns are filed monthly with FIRS.
+                    </p>
+                    <div style={helpStyles.taxCardNote}>VAT Payable = Output VAT − Input VAT − VAT Credit B/F</div>
+                  </div>
+                  <div style={helpStyles.taxCard}>
+                    <div style={helpStyles.taxCardTitle}>WHT — Withholding Tax</div>
+                    <p style={helpStyles.taxCardText}>
+                      Deducted at source from payments made to vendors and service providers. Select the transaction type and recipient type (individual or company). Common rates: Dividends 10%, Professional Services 5% (company) / 10% (individual), Rent 10%, Contracts 5% / 10%.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={helpStyles.section}>
+                <h3 style={helpStyles.sectionTitle}>Auto-Populate from Entries</h3>
+                <p style={helpStyles.text}>
+                  Click <strong>"From Entries"</strong> to automatically fill the calculator with data from your recorded income and expense entries for the selected fiscal year. This works best with CIT (uses total revenue and expenses) and PAYE (estimates salary breakdown from total income). Make sure your entries are correctly categorised before using this feature.
+                </p>
+              </div>
+
+              <div style={helpStyles.section}>
+                <h3 style={helpStyles.sectionTitle}>Important Notes</h3>
+                <ul style={helpStyles.list}>
+                  <li>All calculations are <strong>estimates</strong> based on current Nigerian tax laws and Finance Act provisions.</li>
+                  <li>Actual tax liability may differ depending on specific reliefs, exemptions, or FIRS assessments.</li>
+                  <li>Always consult a <strong>registered tax professional</strong> or FIRS before filing official returns.</li>
+                  <li>Saved calculations are stored in <strong>Tax History</strong> and can be exported at any time.</li>
+                  <li>Use the <strong>Deductions</strong> section to record pension, NHF, and other statutory deductions that feed into the auto-populate feature.</li>
+                </ul>
+              </div>
+
+              <div style={helpStyles.contactBox}>
+                <strong>Need more help?</strong> Visit <span style={{ color: '#2563EB' }}>www.taxwise.com.ng</span> or contact your TaxWise account manager.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+};
+
+const helpStyles = {
+  overlay: {
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+    zIndex: 9000, overflowY: 'auto', padding: '40px 20px',
+  },
+  modal: {
+    width: '100%', maxWidth: '680px',
+    backgroundColor: '#161B22', borderRadius: '16px',
+    border: '1px solid #30363D', overflow: 'hidden', flexShrink: 0,
+  },
+  header: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '20px 24px', borderBottom: '1px solid #30363D',
+  },
+  headerTitle: { display: 'flex', alignItems: 'center', gap: '10px' },
+  title: { fontSize: '18px', fontWeight: '600', color: '#E6EDF3', margin: 0 },
+  closeBtn: {
+    width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'transparent', border: 'none', color: '#8B949E', cursor: 'pointer',
+    borderRadius: '6px', fontSize: '20px',
+  },
+  body: { padding: '24px', overflowY: 'auto', maxHeight: 'calc(80vh - 80px)' },
+  section: { marginBottom: '28px' },
+  sectionTitle: {
+    fontSize: '15px', fontWeight: '600', color: '#E6EDF3',
+    margin: '0 0 12px 0', paddingBottom: '8px', borderBottom: '1px solid #21262D',
+  },
+  text: { fontSize: '14px', color: '#C9D1D9', lineHeight: '1.6', margin: 0 },
+  orderedList: {
+    margin: 0, paddingLeft: '20px', color: '#C9D1D9', fontSize: '14px', lineHeight: '2',
+  },
+  list: {
+    margin: 0, paddingLeft: '20px', color: '#C9D1D9', fontSize: '14px', lineHeight: '2',
+  },
+  taxGrid: {
+    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px',
+  },
+  taxCard: {
+    backgroundColor: '#0D1117', border: '1px solid #30363D',
+    borderRadius: '8px', padding: '14px',
+  },
+  taxCardTitle: {
+    fontSize: '13px', fontWeight: '600', color: '#58A6FF', marginBottom: '6px',
+  },
+  taxCardText: {
+    fontSize: '13px', color: '#8B949E', lineHeight: '1.6', margin: '0 0 6px 0',
+  },
+  taxCardNote: {
+    fontSize: '12px', color: '#3FB950', backgroundColor: 'rgba(63,185,80,0.08)',
+    padding: '6px 10px', borderRadius: '4px',
+  },
+  contactBox: {
+    backgroundColor: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.25)',
+    borderRadius: '8px', padding: '14px 16px',
+    fontSize: '14px', color: '#C9D1D9',
+  },
 };
 
 const styles = {
