@@ -55,15 +55,20 @@ const Deductions = () => {
   };
 
   // Build deduction-shaped objects from expense entries
-  // Exclude entries that were created by a manual deduction (already represented in deductions list)
-  const linkedEntryIds = useMemo(
-    () => new Set(deductions.map(d => d._linked_entry_id).filter(Boolean)),
-    [deductions]
-  );
-
   const expenseEntries = useMemo(() => {
     return entries
-      .filter(e => e.entry_type === 'expense' && !linkedEntryIds.has(e.id))
+      .filter(e => {
+        if (e.entry_type !== 'expense') return false;
+        // Exclude entries that were auto-created by a manual deduction — they are
+        // already represented as a deduction row and would otherwise duplicate.
+        // Survives logout/login because it relies on the persisted metadata field.
+        const meta = e.metadata || (typeof e.metadata === 'string' ? JSON.parse(e.metadata) : {});
+        if (meta?.deduction_sync) return false;
+        // Also exclude by local _linked_entry_id while the session is live
+        const linkedIds = new Set(deductions.map(d => d._linked_entry_id).filter(Boolean));
+        if (linkedIds.has(e.id)) return false;
+        return true;
+      })
       .map(e => ({
         id: e.id,
         description: e.description || 'Expense',
@@ -73,7 +78,7 @@ const Deductions = () => {
         notes: e.vendor_customer || e.reference_number || '',
         _source: 'entry'
       }));
-  }, [entries]);
+  }, [entries, deductions]);
 
   // Combined list: manual deductions + expense entries
   const allDeductionItems = useMemo(() => [...deductions, ...expenseEntries], [deductions, expenseEntries]);
