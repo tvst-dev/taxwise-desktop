@@ -828,7 +828,7 @@ const TaxCalculator = () => {
                     <div style={styles.resultItem}>
                       <span style={styles.resultLabel}>Assessable Profit</span>
                       <span style={styles.resultValue}>
-                        {formatCurrency(result.calculation?.assessableProfit || result.summary.grossAmount)}
+                        {formatCurrency(result.calculation?.chargeableProfit ?? result.calculation?.assessableProfit ?? result.summary.grossAmount)}
                       </span>
                     </div>
                     <div style={styles.resultItem}>
@@ -859,7 +859,7 @@ const TaxCalculator = () => {
                       </span>
                     </div>
                     <div style={styles.resultItem}>
-                      <span style={styles.resultLabel}>Education Tax (2.5%)</span>
+                      <span style={styles.resultLabel}>TETFund Levy — Education Tax (2.5%)</span>
                       <span style={styles.resultValue}>
                         {formatCurrency(result.summary.educationTax)}
                       </span>

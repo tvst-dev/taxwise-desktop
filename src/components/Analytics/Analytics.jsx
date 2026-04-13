@@ -33,10 +33,16 @@ const Analytics = () => {
       }
     });
 
+    // Format category name: capitalize each word, replace underscores with spaces
+    const formatCatName = (n) => n
+      .split(/[_\s]+/)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+
     // Convert to array and sort
     const expensesByCategory = Object.entries(categoryTotals)
       .map(([name, data]) => ({
-        name,
+        name: formatCatName(name),
         amount: data.expense,
         income: data.income
       }))

@@ -227,8 +227,11 @@ export function calculateCIT(params) {
   // Step 2: Adjust for Tax Purposes
   const adjustedProfit = accountingProfit + nonAllowableExpenses;
 
-  // Step 3: Calculate Assessable Profit (after capital allowances)
-  const assessableProfit = Math.max(0, adjustedProfit - capitalAllowances);
+  // Step 3a: Assessable Profit — BEFORE capital allowances (base for TETFund per CITA/FIRS)
+  const assessableProfit = Math.max(0, adjustedProfit);
+
+  // Step 3b: Chargeable Profit — AFTER capital allowances (base for CIT)
+  const chargeableProfit = Math.max(0, adjustedProfit - capitalAllowances);
 
   // Step 4: Determine Company Category and CIT Rate
   let companyCategory;
@@ -251,10 +254,10 @@ export function calculateCIT(params) {
     citRateExplanation = `Turnover > ₦100m: 30% CIT`;
   }
 
-  // Step 5: Calculate CIT Due
-  const citDue = assessableProfit * citRate;
+  // Step 5: Calculate CIT Due (on chargeable profit — after capital allowances)
+  const citDue = chargeableProfit * citRate;
 
-  // Step 6: Calculate Education Tax (2.5% of assessable profit)
+  // Step 6: Tertiary Education Tax / TETFund (2.5% of assessable profit BEFORE capital allowances, per FIRS/CITA s.2 TETFund Act)
   const educationTax = assessableProfit * EDUCATION_TAX_RATE;
 
   // Total Tax Liability
@@ -284,6 +287,7 @@ export function calculateCIT(params) {
       adjustedProfit,
       capitalAllowances,
       assessableProfit,
+      chargeableProfit,
       companyClassification: {
         category: companyCategory,
         turnover: turnoverForRate,
@@ -293,10 +297,10 @@ export function calculateCIT(params) {
       }
     },
     summary: {
-      grossAmount: assessableProfit,
+      grossAmount: chargeableProfit,
       totalDeductions: capitalAllowances,
       totalReliefs: 0,
-      taxableAmount: assessableProfit,
+      taxableAmount: chargeableProfit,
       citDue,
       educationTax,
       educationTaxRate: `${(EDUCATION_TAX_RATE * 100).toFixed(1)}%`,

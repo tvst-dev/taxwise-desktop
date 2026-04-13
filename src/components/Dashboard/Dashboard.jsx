@@ -46,7 +46,8 @@ const Dashboard = () => {
 
     const totalDeductions = deductions.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
-    const totalTaxLiability = calculations.reduce((sum, c) => sum + (parseFloat(c.net_tax_payable) || 0), 0);
+    const latestCalc = [...calculations].sort((a, b) => new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt))[0];
+    const totalTaxLiability = parseFloat(latestCalc?.net_tax_payable) || 0;
 
     const netCashFlow = allTimeIncome - allTimeExpenses;
     const netTaxable = allTimeIncome - totalDeductions;
@@ -147,9 +148,9 @@ const Dashboard = () => {
               <TrendingUp size={18} color="#22C55E" />
             </div>
           </div>
-          <div style={styles.statValue}>{formatCurrency(stats.totalIncome)}</div>
+          <div style={styles.statValue}>{formatCurrency(stats.allTimeIncome)}</div>
           <div style={styles.statFooter}>
-            <span style={styles.statPeriod}>This month</span>
+            <span style={styles.statPeriod}>All time</span>
           </div>
         </div>
 
@@ -160,9 +161,9 @@ const Dashboard = () => {
               <TrendingDown size={18} color="#EF4444" />
             </div>
           </div>
-          <div style={styles.statValue}>{formatCurrency(stats.totalExpenses)}</div>
+          <div style={styles.statValue}>{formatCurrency(stats.allTimeExpenses)}</div>
           <div style={styles.statFooter}>
-            <span style={styles.statPeriod}>This month</span>
+            <span style={styles.statPeriod}>All time</span>
           </div>
         </div>
 

@@ -48,9 +48,11 @@ export const loadOrganizationData = async (organizationId) => {
     }));
     usePOSStore.getState().setProducts(products);
 
-    // Load deductions
+    // Load deductions — merge with any local-only fallback items (ids start with 'ded_')
     const deductions = await db.getDeductions(organizationId);
-    useDeductionsStore.getState().setDeductions(deductions);
+    const localOnlyDeductions = useDeductionsStore.getState().deductions
+      .filter(d => typeof d.id === 'string' && d.id.startsWith('ded_'));
+    useDeductionsStore.getState().setDeductions([...deductions, ...localOnlyDeductions]);
 
     // Load documents
     const documents = await db.getDocuments(organizationId);

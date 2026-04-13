@@ -83,6 +83,12 @@ function App() {
           console.log('Auth event:', event);
           if (event === 'SIGNED_IN' && session?.user) {
             await loadUserData(session.user.id);
+          } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+            // Session silently refreshed — re-sync org data so writes stay live
+            const { organization } = useAuthStore.getState();
+            if (organization?.id) {
+              try { await loadOrganizationData(organization.id); } catch (_) {}
+            }
           } else if (event === 'PASSWORD_RECOVERY') {
             // Deep link token exchanged — send user to reset page
             window.location.hash = '/reset-password';
@@ -92,6 +98,12 @@ function App() {
           }
         });
         authSubscription = subscription;
+
+        // Proactive keepalive: ping session every 10 min so autoRefresh fires before 1-hour expiry
+        const keepaliveInterval = setInterval(async () => {
+          try { await getCurrentSession(); } catch (_) {}
+        }, 10 * 60 * 1000);
+        authSubscription._keepalive = keepaliveInterval;
 
         // Listen for taxwise:// deep links from the Electron main process
         if (window.electronAPI?.onDeepLink) {
@@ -117,7 +129,10 @@ function App() {
     };
 
     initializeApp();
-    return () => authSubscription?.unsubscribe();
+    return () => {
+      authSubscription?.unsubscribe();
+      if (authSubscription?._keepalive) clearInterval(authSubscription._keepalive);
+    };
   }, []);
 
   const loadUserData = async (userId) => {
