@@ -127,13 +127,15 @@ const Deductions = () => {
       : new Date().toISOString().split('T')[0];
 
     const entryData = {
-      description: form.description,
-      amount: parseFloat(form.amount),
+      organization_id: organization?.id,
       entry_type: 'expense',
       category: form.category,
+      description: form.description,
+      amount: parseFloat(form.amount),
       date: entryDate,
-      notes: form.notes || '',
-      organization_id: organization?.id,
+      vendor_customer: form.notes || null,
+      vat_amount: 0,
+      status: 'posted',
       metadata: { deduction_sync: true }
     };
 
@@ -189,7 +191,8 @@ const Deductions = () => {
         const localEntry = {
           ...entryData,
           id: `entry_ded_${Date.now()}`,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          organization_id: organization?.id
         };
         addEntry(localEntry);
         addDeduction({ ...deductionData, _linked_entry_id: localEntry.id });
