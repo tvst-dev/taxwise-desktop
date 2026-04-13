@@ -85,7 +85,7 @@ const ExportModal = () => {
 
       // --- ENTRIES / TRANSACTIONS ---
       if (exportType === 'transactions' || exportType === 'audit_report') {
-        const source = passedData || entries;
+        const source = Array.isArray(passedData) ? passedData : entries;
         const filtered = source.filter(e => {
           const d = new Date(e.date || e.created_at || e.createdAt);
           return d >= startDate && d <= endDate;
@@ -134,7 +134,7 @@ const ExportModal = () => {
 
       // --- TAX CALCULATIONS ---
       else if (exportType === 'tax_calculations') {
-        const source = passedData || calculations;
+        const source = Array.isArray(passedData) ? passedData : calculations;
         const filtered = source.filter(c => {
           const d = new Date(c.created_at || c.createdAt);
           return d >= startDate && d <= endDate;

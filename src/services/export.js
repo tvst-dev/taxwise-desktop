@@ -58,38 +58,27 @@ class ExportService {
   async exportTaxCalculationPDF(data, options = {}) {
     const doc = new jsPDF();
     const { calculation, organization, generatedBy } = data;
+    const W = doc.internal.pageSize.getWidth();
 
-    // Header
-    doc.setFillColor(37, 99, 235);
-    doc.rect(0, 0, 210, 35, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Tax Calculation Report', 14, 20);
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${this.formatDate(new Date())}`, 14, 28);
+    const startY = this._drawPDFHeader(doc, {
+      reportTitle: 'Tax Calculation Report',
+      organization,
+      pageWidth: W
+    });
 
-    // Organization Info
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(organization?.name || 'Organization', 14, 48);
-    
-    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`TIN: ${organization?.tin || 'N/A'}`, 14, 55);
-    doc.text(`Reference: ${calculation.referenceId || 'N/A'}`, 14, 62);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Reference: ${calculation.referenceId || 'N/A'}`, 14, startY + 2);
 
     // Tax Type Header
+    const taxTypeY = startY + 10;
     doc.setFillColor(22, 27, 34);
-    doc.rect(14, 72, 182, 10, 'F');
+    doc.rect(14, taxTypeY, 182, 10, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Tax Type: ${calculation.taxType}`, 18, 79);
+    doc.text(`Tax Type: ${calculation.taxType}`, 18, taxTypeY + 7);
 
     // Calculation Summary Table
     const summaryData = [
@@ -102,7 +91,7 @@ class ExportService {
     ];
 
     autoTable(doc, {
-      startY: 88,
+      startY: taxTypeY + 14,
       head: [summaryData[0]],
       body: summaryData.slice(1),
       theme: 'striped',
@@ -176,68 +165,134 @@ class ExportService {
   }
 
   /**
+   * Draw a reusable branded header on a jsPDF document page.
+   * Call this before adding any content. Returns the Y position where
+   * body content should start.
+   *
+   * @param {jsPDF} doc
+   * @param {object} opts  { reportTitle, organization, dateRange, pageWidth }
+   * @returns {number} startY — Y coordinate after the header block
+   */
+  _drawPDFHeader(doc, { reportTitle, organization, dateRange, pageWidth }) {
+    const W = pageWidth || doc.internal.pageSize.getWidth();
+
+    // ── Full-width gradient-style banner (two-tone) ──
+    doc.setFillColor(15, 23, 42);            // near-black top strip
+    doc.rect(0, 0, W, 8, 'F');
+    doc.setFillColor(37, 99, 235);           // TaxWise blue main banner
+    doc.rect(0, 8, W, 34, 'F');
+
+    // ── Logo mark: rounded square + "TW" initials ──
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, 11, 22, 22, 4, 4, 'F');
+    doc.setTextColor(37, 99, 235);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TW', 25, 25, { align: 'center' });
+
+    // ── Brand name ──
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TaxWise Nigeria', 42, 20);
+
+    // ── Tagline ──
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(180, 210, 255);
+    doc.text('Simplified Tax Management', 42, 27);
+
+    // ── Report title (right-aligned) ──
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(reportTitle, W - 14, 20, { align: 'right' });
+
+    // ── Date/period (right-aligned, small) ──
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(180, 210, 255);
+    const now = new Date();
+    doc.text(`Generated: ${this.formatDate(now)}`, W - 14, 27, { align: 'right' });
+    if (dateRange?.start && dateRange?.end) {
+      doc.text(`Period: ${dateRange.start} to ${dateRange.end}`, W - 14, 33, { align: 'right' });
+    }
+
+    // ── Thin accent line below banner ──
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(1);
+    doc.line(0, 42, W, 42);
+
+    // ── Organisation info row ──
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 30, 30);
+    const orgName = organization?.name || 'Organisation';
+    doc.text(orgName, 14, 51);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    const metaParts = [];
+    if (organization?.tin) metaParts.push(`TIN: ${organization.tin}`);
+    metaParts.push(`${COMPANY_INFO.website}`);
+    if (metaParts.length) doc.text(metaParts.join('   |   '), 14, 57);
+
+    // ── Thin separator ──
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.3);
+    doc.line(14, 60, W - 14, 60);
+
+    return 65; // content starts here
+  }
+
+  /**
    * Export entries/transactions to PDF
    */
   async exportEntriesPDF(data, options = {}) {
     const doc = new jsPDF('landscape');
     const { entries, organization, dateRange, title } = data;
     const reportTitle = title || 'Transaction Report';
-    const now = new Date();
+    const W = doc.internal.pageSize.getWidth();
 
-    // ── Blue header banner ──
-    doc.setFillColor(37, 99, 235);
-    doc.rect(0, 0, 297, 38, 'F');
+    const startY = this._drawPDFHeader(doc, { reportTitle, organization, dateRange, pageWidth: W });
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TaxWise Nigeria', 14, 14);
-
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'normal');
-    doc.text(reportTitle, 14, 23);
-
-    doc.setFontSize(9);
-    doc.text(`Generated: ${this.formatDate(now)}`, 14, 31);
-    if (dateRange?.start && dateRange?.end) {
-      doc.text(`Period: ${dateRange.start} to ${dateRange.end}`, 100, 31);
-    }
-
-    // ── Organisation info block ──
-    doc.setTextColor(30, 30, 30);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text(organization?.name || 'Organisation', 14, 46);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    if (organization?.tin) doc.text(`TIN: ${organization.tin}`, 14, 52);
-    doc.text(`Total records: ${entries.length}`, 14, 58);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Total records: ${entries.length}`, 14, startY - 1);
 
     // ── Table ──
     const tableData = entries.map((entry, index) => {
       const rawId = entry.entry_id || entry.entryId || entry.id || '-';
       const shortId = rawId.length > 13 ? rawId.slice(0, 13) + '…' : rawId;
       return [
-      index + 1,
-      shortId,
-      this.formatDate(entry.date || entry.created_at),
-      entry.description || '-',
-      (entry.entry_type || entry.type || '-').toUpperCase(),
-      entry.category || '-',
-      this.formatCurrency(parseFloat(entry.amount) || 0),
-      entry.vat_amount ? this.formatCurrency(parseFloat(entry.vat_amount)) : '-',
-      (entry.status || 'active').charAt(0).toUpperCase() + (entry.status || 'active').slice(1)
+        index + 1,
+        shortId,
+        this.formatDate(entry.date || entry.created_at),
+        entry.description || '-',
+        (entry.entry_type || entry.type || '-').toUpperCase(),
+        entry.category || '-',
+        this.formatCurrency(parseFloat(entry.amount) || 0),
+        entry.vat_amount ? this.formatCurrency(parseFloat(entry.vat_amount)) : '-',
+        (entry.status || 'active').charAt(0).toUpperCase() + (entry.status || 'active').slice(1)
       ];
     });
 
     autoTable(doc, {
-      startY: 64,
+      startY: startY + 4,
       head: [['#', 'Entry ID', 'Date', 'Description', 'Type', 'Category', 'Amount (NGN)', 'VAT (NGN)', 'Status']],
       body: tableData,
-      theme: 'striped',
-      headStyles: { fillColor: [22, 27, 34], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 3 },
-      alternateRowStyles: { fillColor: [245, 247, 250] },
+      theme: 'grid',
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8,
+        cellPadding: 4
+      },
+      styles: { fontSize: 8, cellPadding: 3.5 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         0: { cellWidth: 10, halign: 'center' },
         1: { cellWidth: 28 },
@@ -245,24 +300,37 @@ class ExportService {
         3: { cellWidth: 65 },
         4: { cellWidth: 22 },
         5: { cellWidth: 28 },
-        6: { cellWidth: 30, halign: 'right' },
-        7: { cellWidth: 24, halign: 'right' },
+        6: { cellWidth: 32, halign: 'right' },
+        7: { cellWidth: 26, halign: 'right' },
         8: { cellWidth: 22, halign: 'center' }
       },
       didDrawPage: (hookData) => {
-        // Footer on every page
+        // Re-draw header on subsequent pages
+        if (hookData.pageNumber > 1) {
+          this._drawPDFHeader(doc, { reportTitle, organization, dateRange, pageWidth: W });
+        }
+        // Footer
         const pageCount = doc.internal.getNumberOfPages();
+        doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
-        doc.setTextColor(150);
+        doc.setTextColor(150, 150, 150);
+        const footerY = doc.internal.pageSize.getHeight() - 6;
         doc.text(
-          `TaxWise Nigeria · ${reportTitle} · Page ${hookData.pageNumber} of ${pageCount}`,
-          14,
-          doc.internal.pageSize.getHeight() - 8
+          `TaxWise Nigeria  |  ${reportTitle}  |  www.taxwise.ng`,
+          14, footerY
         );
+        doc.text(
+          `Page ${hookData.pageNumber} of ${pageCount}`,
+          W - 14, footerY, { align: 'right' }
+        );
+        // footer line
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.3);
+        doc.line(14, footerY - 3, W - 14, footerY - 3);
       }
     });
 
-    // ── Summary totals ──
+    // ── Summary totals box ──
     const totalIncome = entries
       .filter(e => (e.entry_type || e.type || '').toLowerCase() === 'income')
       .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
@@ -270,25 +338,42 @@ class ExportService {
       .filter(e => (e.entry_type || e.type || '').toLowerCase() === 'expense')
       .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
     const totalVAT = entries.reduce((sum, e) => sum + (parseFloat(e.vat_amount) || 0), 0);
+    const netBalance = totalIncome - totalExpense;
 
-    const finalY = Math.min(doc.lastAutoTable.finalY + 10, doc.internal.pageSize.getHeight() - 40);
+    const finalY = Math.min(doc.lastAutoTable.finalY + 8, doc.internal.pageSize.getHeight() - 45);
 
-    // ── Reset font state after autoTable (prevents character-spacing corruption) ──
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(30, 30, 30);
-    doc.setCharSpace(0);
+    // Summary background box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(14, finalY, 120, totalVAT > 0 ? 32 : 26, 3, 3, 'FD');
 
-    doc.setDrawColor(37, 99, 235);
-    doc.setLineWidth(0.5);
-    doc.line(14, finalY - 2, 283, finalY - 2);
-
-    doc.text(`Total Income:  ${this.formatCurrency(totalIncome)}`, 14, finalY + 5);
-    doc.text(`Total Expense: ${this.formatCurrency(totalExpense)}`, 14, finalY + 12);
-    if (totalVAT > 0) doc.text(`Total VAT:     ${this.formatCurrency(totalVAT)}`, 14, finalY + 19);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(`Net Balance:   ${this.formatCurrency(totalIncome - totalExpense)}`, 14, finalY + (totalVAT > 0 ? 28 : 21));
+    doc.setFontSize(8);
+    doc.setTextColor(80, 80, 80);
+    doc.text('SUMMARY', 20, finalY + 7);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 30, 30);
+    doc.text(`Total Income:`, 20, finalY + 14);
+    doc.text(this.formatCurrency(totalIncome), 80, finalY + 14, { align: 'right' });
+    doc.text(`Total Expenses:`, 20, finalY + 20);
+    doc.text(this.formatCurrency(totalExpense), 80, finalY + 20, { align: 'right' });
+    if (totalVAT > 0) {
+      doc.text(`Total VAT:`, 20, finalY + 26);
+      doc.text(this.formatCurrency(totalVAT), 80, finalY + 26, { align: 'right' });
+    }
+
+    // Net balance with color
+    const netY = finalY + (totalVAT > 0 ? 32 : 26) + 6;
+    doc.setFillColor(netBalance >= 0 ? 34 : 239, netBalance >= 0 ? 197 : 68, netBalance >= 0 ? 94 : 68);
+    doc.roundedRect(14, netY - 5, 120, 12, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text('Net Balance:', 20, netY + 3);
+    doc.text(this.formatCurrency(netBalance), 128, netY + 3, { align: 'right' });
 
     return doc;
   }
@@ -403,37 +488,73 @@ class ExportService {
 
     const sheet = workbook.addWorksheet('Transactions');
 
-    // ── Title block ──
+    // ── Branded header block (rows 1–7) ──
+    // Row 1: dark top accent strip
     sheet.mergeCells('A1:I1');
-    const titleCell = sheet.getCell('A1');
-    titleCell.value = 'TaxWise Nigeria';
-    titleCell.font = { size: 18, bold: true, color: { argb: 'FF2563EB' } };
-    titleCell.alignment = { horizontal: 'left' };
+    const accentCell = sheet.getCell('A1');
+    accentCell.value = '';
+    accentCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F1728' } };
+    sheet.getRow(1).height = 6;
 
+    // Row 2: logo + brand name
     sheet.mergeCells('A2:I2');
-    sheet.getCell('A2').value = reportTitle;
-    sheet.getCell('A2').font = { size: 13, bold: true };
+    const brandCell = sheet.getCell('A2');
+    brandCell.value = 'TW  TaxWise Nigeria';
+    brandCell.font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+    brandCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+    brandCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    sheet.getRow(2).height = 32;
 
-    sheet.getCell('A3').value = 'Organisation:';
-    sheet.getCell('A3').font = { bold: true };
-    sheet.getCell('B3').value = organization?.name || 'N/A';
+    // Row 3: tagline strip
+    sheet.mergeCells('A3:I3');
+    const taglineCell = sheet.getCell('A3');
+    taglineCell.value = 'Simplified Tax Management  |  www.taxwise.ng';
+    taglineCell.font = { size: 9, color: { argb: 'FFB4D2FF' } };
+    taglineCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A6E' } };
+    taglineCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    sheet.getRow(3).height = 16;
 
-    sheet.getCell('A4').value = 'TIN:';
-    sheet.getCell('A4').font = { bold: true };
-    sheet.getCell('B4').value = organization?.tin || 'N/A';
+    // Row 4: report title
+    sheet.mergeCells('A4:I4');
+    const reportTitleCell = sheet.getCell('A4');
+    reportTitleCell.value = reportTitle;
+    reportTitleCell.font = { size: 13, bold: true, color: { argb: 'FF1E293B' } };
+    reportTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F6FF' } };
+    reportTitleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    sheet.getRow(4).height = 22;
 
-    sheet.getCell('A5').value = 'Period:';
-    sheet.getCell('A5').font = { bold: true };
-    sheet.getCell('B5').value = dateRange?.start && dateRange?.end
-      ? `${dateRange.start} to ${dateRange.end}` : 'All dates';
+    // Row 5: organisation meta
+    sheet.getCell('A5').value = 'Organisation:';
+    sheet.getCell('A5').font = { bold: true, color: { argb: 'FF6E7681' }, size: 10 };
+    sheet.getCell('B5').value = organization?.name || 'N/A';
+    sheet.getCell('B5').font = { size: 10 };
+    sheet.getCell('E5').value = 'TIN:';
+    sheet.getCell('E5').font = { bold: true, color: { argb: 'FF6E7681' }, size: 10 };
+    sheet.getCell('F5').value = organization?.tin || 'N/A';
+    sheet.getCell('F5').font = { size: 10 };
+    sheet.getRow(5).height = 16;
 
-    sheet.getCell('A6').value = 'Generated:';
-    sheet.getCell('A6').font = { bold: true };
-    sheet.getCell('B6').value = this.formatDate(new Date());
+    // Row 6: period + generated
+    sheet.getCell('A6').value = 'Period:';
+    sheet.getCell('A6').font = { bold: true, color: { argb: 'FF6E7681' }, size: 10 };
+    sheet.getCell('B6').value = dateRange?.start && dateRange?.end
+      ? `${dateRange.start}  to  ${dateRange.end}` : 'All dates';
+    sheet.getCell('B6').font = { size: 10 };
+    sheet.getCell('E6').value = 'Generated:';
+    sheet.getCell('E6').font = { bold: true, color: { argb: 'FF6E7681' }, size: 10 };
+    sheet.getCell('F6').value = this.formatDate(new Date());
+    sheet.getCell('F6').font = { size: 10 };
+    sheet.getRow(6).height = 16;
 
+    // Row 7: total records
     sheet.getCell('A7').value = 'Total Records:';
-    sheet.getCell('A7').font = { bold: true };
+    sheet.getCell('A7').font = { bold: true, color: { argb: 'FF6E7681' }, size: 10 };
     sheet.getCell('B7').value = entries.length;
+    sheet.getCell('B7').font = { size: 10 };
+    sheet.getRow(7).height = 16;
+
+    // Row 8: spacer
+    sheet.getRow(8).height = 6;
 
     // ── Data table (starting row 9) ──
     const headerRow = sheet.getRow(9);
