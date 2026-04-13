@@ -11,7 +11,7 @@ export default async function handler(req, res) {
 
   try {
     const r = await fetch(
-      'https://api.github.com/repos/tvst-dev/taxwise-releases/releases?per_page=10',
+      'https://api.github.com/repos/tvst-dev/taxwise-desktop/releases?per_page=10',
       { headers }
     );
     const data = await r.json();
