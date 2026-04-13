@@ -26,20 +26,36 @@ export const loadOrganizationData = async (organizationId) => {
     return;
   }
 
+  // Each store loads independently — one failure never blocks the others.
+
+  // Load entries
   try {
-    // Load entries
     const entries = await db.getEntries(organizationId);
     useEntriesStore.getState().setEntries(entries);
+  } catch (e) {
+    console.warn('Entries load failed:', e.message);
+  }
 
-    // Load tax calculations
+  // Load tax calculations — preserve any locally-saved fallback records (calc_ prefix)
+  try {
     const calculations = await db.getTaxCalculations(organizationId);
-    useTaxStore.getState().setCalculations(calculations);
+    const localOnly = useTaxStore.getState().calculations
+      .filter(c => typeof c.id === 'string' && c.id.startsWith('calc_'));
+    useTaxStore.getState().setCalculations([...calculations, ...localOnly]);
+  } catch (e) {
+    console.warn('Tax calculations load failed:', e.message);
+  }
 
-    // Load reminders
+  // Load reminders
+  try {
     const reminders = await db.getReminders(organizationId);
     useRemindersStore.getState().setReminders(reminders);
+  } catch (e) {
+    console.warn('Reminders load failed:', e.message);
+  }
 
-    // Load products — normalize DB column names to local store field names
+  // Load products — normalize DB column names to local store field names
+  try {
     const rawProducts = await db.getProducts(organizationId);
     const products = rawProducts.map(p => ({
       ...p,
@@ -47,47 +63,53 @@ export const loadOrganizationData = async (organizationId) => {
       vatApplicable: p.is_vat_applicable
     }));
     usePOSStore.getState().setProducts(products);
+  } catch (e) {
+    console.warn('Products load failed:', e.message);
+  }
 
-    // Load deductions — merge with any local-only fallback items (ids start with 'ded_')
+  // Load deductions — merge with any local-only fallback items (ids start with 'ded_')
+  try {
     const deductions = await db.getDeductions(organizationId);
-    const localOnlyDeductions = useDeductionsStore.getState().deductions
+    const localOnly = useDeductionsStore.getState().deductions
       .filter(d => typeof d.id === 'string' && d.id.startsWith('ded_'));
-    useDeductionsStore.getState().setDeductions([...deductions, ...localOnlyDeductions]);
+    useDeductionsStore.getState().setDeductions([...deductions, ...localOnly]);
+  } catch (e) {
+    console.warn('Deductions load failed:', e.message);
+  }
 
-    // Load documents
+  // Load documents
+  try {
     const documents = await db.getDocuments(organizationId);
     useDocumentsStore.getState().setDocuments(documents);
-
-    // Load bank accounts
-    try {
-      const accounts = await db.getBankAccounts(organizationId);
-      useBankStore.getState().setAccounts(accounts || []);
-    } catch (e) {
-      console.warn('Bank accounts load failed:', e.message);
-    }
-
-    // Load team members
-    try {
-      const members = await db.getTeamMembers(organizationId);
-      useTeamStore.getState().setMembers(members || []);
-    } catch (e) {
-      console.warn('Team members load failed:', e.message);
-    }
-
-    // Load pending invitations
-    try {
-      const invitations = await db.getInvitations(organizationId);
-      useTeamStore.getState().setInvitations(invitations || []);
-    } catch (e) {
-      console.warn('Invitations load failed:', e.message);
-    }
-
-    console.log('Organization data loaded successfully');
-
-  } catch (error) {
-    console.error('Error loading organization data:', error);
-    throw error;
+  } catch (e) {
+    console.warn('Documents load failed:', e.message);
   }
+
+  // Load bank accounts
+  try {
+    const accounts = await db.getBankAccounts(organizationId);
+    useBankStore.getState().setAccounts(accounts || []);
+  } catch (e) {
+    console.warn('Bank accounts load failed:', e.message);
+  }
+
+  // Load team members
+  try {
+    const members = await db.getTeamMembers(organizationId);
+    useTeamStore.getState().setMembers(members || []);
+  } catch (e) {
+    console.warn('Team members load failed:', e.message);
+  }
+
+  // Load pending invitations
+  try {
+    const invitations = await db.getInvitations(organizationId);
+    useTeamStore.getState().setInvitations(invitations || []);
+  } catch (e) {
+    console.warn('Invitations load failed:', e.message);
+  }
+
+  console.log('Organization data loaded successfully');
 };
 
 /**
