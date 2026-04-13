@@ -54,20 +54,16 @@ const Deductions = () => {
     return 'business_expense';
   };
 
-  // Build deduction-shaped objects from expense entries
+  // Expense entries that are NOT linked to a manual deduction.
+  // Uses metadata.deduction_sync (persisted in DB) so the filter survives logout/login.
   const expenseEntries = useMemo(() => {
     return entries
       .filter(e => {
         if (e.entry_type !== 'expense') return false;
-        // Exclude entries that were auto-created by a manual deduction — they are
-        // already represented as a deduction row and would otherwise duplicate.
-        // Survives logout/login because it relies on the persisted metadata field.
-        const meta = e.metadata || (typeof e.metadata === 'string' ? JSON.parse(e.metadata) : {});
-        if (meta?.deduction_sync) return false;
-        // Also exclude by local _linked_entry_id while the session is live
-        const linkedIds = new Set(deductions.map(d => d._linked_entry_id).filter(Boolean));
-        if (linkedIds.has(e.id)) return false;
-        return true;
+        const meta = e.metadata;
+        // If Supabase returned metadata as a JSON string, parse it
+        const m = typeof meta === 'string' ? (() => { try { return JSON.parse(meta); } catch { return {}; } })() : (meta || {});
+        return !m.deduction_sync;
       })
       .map(e => ({
         id: e.id,
@@ -78,7 +74,7 @@ const Deductions = () => {
         notes: e.vendor_customer || e.reference_number || '',
         _source: 'entry'
       }));
-  }, [entries, deductions]);
+  }, [entries]);
 
   // Combined list: manual deductions + expense entries
   const allDeductionItems = useMemo(() => [...deductions, ...expenseEntries], [deductions, expenseEntries]);
@@ -121,90 +117,108 @@ const Deductions = () => {
       return;
     }
 
-    const deductionData = {
-      ...form,
-      amount: parseFloat(form.amount)
-    };
-
-    // Build the corresponding expense entry data
+    const amount = parseFloat(form.amount);
     const entryDate = form.tax_year
       ? `${form.tax_year}-01-01`
       : new Date().toISOString().split('T')[0];
 
+    // ── UPDATE existing deduction ──
+    if (editingDeduction) {
+      const deductionUpdate = {
+        description: form.description,
+        amount,
+        category: form.category,
+        tax_year: form.tax_year,
+        documentation: form.documentation || '',
+        notes: form.notes || ''
+      };
+
+      try {
+        const updated = await dbUpdateDeduction(editingDeduction.id, deductionUpdate);
+        updateDeduction(editingDeduction.id, updated);
+      } catch (e) {
+        console.warn('DB deduction update failed, updating locally:', e.message);
+        updateDeduction(editingDeduction.id, { ...editingDeduction, ...deductionUpdate });
+      }
+
+      // Find linked entry via metadata.deduction_id (works after re-login)
+      const linkedEntry = entries.find(e => {
+        const m = typeof e.metadata === 'string' ? (() => { try { return JSON.parse(e.metadata); } catch { return {}; } })() : (e.metadata || {});
+        return m.deduction_id === editingDeduction.id;
+      });
+      if (linkedEntry) {
+        const entryUpdate = {
+          description: form.description,
+          amount,
+          category: form.category,
+          date: entryDate,
+          vendor_customer: form.notes || null
+        };
+        try {
+          const updatedEntry = await updateEntry(linkedEntry.id, entryUpdate);
+          updateStoreEntry(linkedEntry.id, updatedEntry);
+        } catch (e) {
+          console.warn('Could not sync deduction update to entry:', e.message);
+          updateStoreEntry(linkedEntry.id, { ...linkedEntry, ...entryUpdate });
+        }
+      }
+
+      toast.success('Deduction updated');
+      resetForm();
+      return;
+    }
+
+    // ── CREATE new deduction ──
+    const deductionData = {
+      description: form.description,
+      amount,
+      category: form.category,
+      tax_year: form.tax_year,
+      documentation: form.documentation || '',
+      notes: form.notes || '',
+      organization_id: organization?.id
+    };
+
+    // Step 1: save deduction to get its ID
+    let deductionId = null;
+    try {
+      const created = await createDeduction(deductionData);
+      addDeduction(created);
+      deductionId = created.id;
+    } catch (e) {
+      console.warn('DB deduction save failed, saving locally:', e.message);
+      deductionId = `ded_${Date.now()}`;
+      addDeduction({ ...deductionData, id: deductionId, created_at: new Date().toISOString() });
+    }
+
+    // Step 2: create linked expense entry stamped with the deduction ID
     const entryData = {
       organization_id: organization?.id,
       entry_type: 'expense',
       category: form.category,
       description: form.description,
-      amount: parseFloat(form.amount),
+      amount,
       date: entryDate,
       vendor_customer: form.notes || null,
       vat_amount: 0,
       status: 'posted',
-      metadata: { deduction_sync: true }
+      // deduction_id lets us find this entry from the deduction even after re-login
+      metadata: { deduction_sync: true, deduction_id: deductionId }
     };
 
     try {
-      if (editingDeduction) {
-        // _linked_entry_id is not a DB column — strip it from the update payload
-        const { _linked_entry_id: _ignored, ...dbUpdateData } = deductionData;
-        const updated = await dbUpdateDeduction(editingDeduction.id, dbUpdateData);
-        // Keep _linked_entry_id in local state
-        updateDeduction(editingDeduction.id, { ...updated, _linked_entry_id: editingDeduction._linked_entry_id });
-        // Sync update to the linked expense entry if one exists
-        if (editingDeduction._linked_entry_id) {
-          try {
-            const updatedEntry = await updateEntry(editingDeduction._linked_entry_id, {
-              description: deductionData.description,
-              amount: deductionData.amount,
-              category: deductionData.category,
-              notes: deductionData.notes || ''
-            });
-            updateStoreEntry(editingDeduction._linked_entry_id, updatedEntry);
-          } catch (entryErr) {
-            console.warn('Could not sync deduction update to entry:', entryErr.message);
-          }
-        }
-        toast.success('Deduction updated');
-      } else {
-        // Create expense entry first so we can store its id on the deduction
-        let linkedEntryId = null;
-        try {
-          const createdEntry = await createEntry(entryData);
-          addEntry(createdEntry);
-          linkedEntryId = createdEntry.id;
-        } catch (entryErr) {
-          console.warn('Could not create linked expense entry:', entryErr.message);
-        }
-
-        // _linked_entry_id is not a DB column — strip it from the insert payload
-        const created = await createDeduction({
-          ...deductionData,
-          organization_id: organization?.id
-        });
-        // Attach the linked entry ID in local store state only
-        addDeduction({ ...created, _linked_entry_id: linkedEntryId });
-        toast.success('Deduction added');
-      }
+      const createdEntry = await createEntry(entryData);
+      addEntry(createdEntry);
     } catch (e) {
-      console.warn('DB save failed, saving locally:', e.message);
-      if (editingDeduction) {
-        updateDeduction(editingDeduction.id, deductionData);
-        toast.success('Deduction updated');
-      } else {
-        // Still try to create a local entry
-        const localEntry = {
-          ...entryData,
-          id: `entry_ded_${Date.now()}`,
-          created_at: new Date().toISOString(),
-          organization_id: organization?.id
-        };
-        addEntry(localEntry);
-        addDeduction({ ...deductionData, _linked_entry_id: localEntry.id });
-        toast.success('Deduction added');
-      }
+      console.warn('Could not persist linked expense entry to DB, saving locally:', e.message);
+      addEntry({
+        ...entryData,
+        id: `entry_ded_${Date.now()}`,
+        created_at: new Date().toISOString()
+      });
     }
 
+    toast.success('Deduction added');
     resetForm();
   };
 
@@ -235,31 +249,37 @@ const Deductions = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this deduction?')) {
-      const target = deductions.find(d => d.id === id);
-      const isLocalOnly = typeof id === 'string' && id.startsWith('ded_');
-      if (!isLocalOnly) {
-        try {
-          await deleteDeduction(id);
-        } catch (e) {
-          console.warn('DB delete failed, removing locally:', e.message);
-        }
+    if (!window.confirm('Delete this deduction?')) return;
+
+    // Delete deduction from DB (skip if local-only id)
+    const isLocalOnly = typeof id === 'string' && id.startsWith('ded_');
+    if (!isLocalOnly) {
+      try {
+        await deleteDeduction(id);
+      } catch (e) {
+        console.warn('DB deduction delete failed, removing locally:', e.message);
       }
-      removeDeduction(id);
-      // Also remove the linked expense entry if one was created by this deduction
-      if (target?._linked_entry_id) {
-        const entryIsLocal = typeof target._linked_entry_id === 'string' && target._linked_entry_id.startsWith('entry_ded_');
-        if (!entryIsLocal) {
-          try {
-            await deleteEntry(target._linked_entry_id);
-          } catch (entryErr) {
-            console.warn('Could not delete linked expense entry:', entryErr.message);
-          }
-        }
-        removeEntry(target._linked_entry_id);
-      }
-      toast.success('Deduction deleted');
     }
+    removeDeduction(id);
+
+    // Find and delete the linked expense entry via metadata.deduction_id
+    const linkedEntry = entries.find(e => {
+      const m = typeof e.metadata === 'string' ? (() => { try { return JSON.parse(e.metadata); } catch { return {}; } })() : (e.metadata || {});
+      return m.deduction_id === id;
+    });
+    if (linkedEntry) {
+      const entryIsLocal = typeof linkedEntry.id === 'string' && linkedEntry.id.startsWith('entry_ded_');
+      if (!entryIsLocal) {
+        try {
+          await deleteEntry(linkedEntry.id);
+        } catch (e) {
+          console.warn('Could not delete linked expense entry:', e.message);
+        }
+      }
+      removeEntry(linkedEntry.id);
+    }
+
+    toast.success('Deduction deleted');
   };
 
   const handleExport = () => {
