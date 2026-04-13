@@ -442,7 +442,8 @@ const styles = {
   typeGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' },
   typeButton: {
     display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px 14px',
-    backgroundColor: '#0D1117', border: '1px solid #30363D',
+    backgroundColor: '#0D1117',
+    borderWidth: '1px', borderStyle: 'solid', borderColor: '#30363D',
     borderRadius: '8px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s ease'
   },
   typeButtonActive: { borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.08)' },
@@ -475,8 +476,8 @@ const styles = {
   formatButton: {
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
     padding: '16px 10px', backgroundColor: '#0D1117',
-    border: '1px solid #30363D', borderRadius: '8px',
-    color: '#8B949E', cursor: 'pointer', transition: 'all 0.15s ease'
+    borderWidth: '1px', borderStyle: 'solid', borderColor: '#30363D',
+    borderRadius: '8px', color: '#8B949E', cursor: 'pointer', transition: 'all 0.15s ease'
   },
   formatButtonActive: { borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.08)', color: '#2563EB' },
   formatName: { fontSize: '13px', fontWeight: '600', color: 'inherit' },

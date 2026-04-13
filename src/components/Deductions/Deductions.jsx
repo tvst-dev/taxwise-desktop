@@ -139,8 +139,11 @@ const Deductions = () => {
 
     try {
       if (editingDeduction) {
-        const updated = await dbUpdateDeduction(editingDeduction.id, deductionData);
-        updateDeduction(editingDeduction.id, updated);
+        // _linked_entry_id is not a DB column — strip it from the update payload
+        const { _linked_entry_id: _ignored, ...dbUpdateData } = deductionData;
+        const updated = await dbUpdateDeduction(editingDeduction.id, dbUpdateData);
+        // Keep _linked_entry_id in local state
+        updateDeduction(editingDeduction.id, { ...updated, _linked_entry_id: editingDeduction._linked_entry_id });
         // Sync update to the linked expense entry if one exists
         if (editingDeduction._linked_entry_id) {
           try {
@@ -167,12 +170,13 @@ const Deductions = () => {
           console.warn('Could not create linked expense entry:', entryErr.message);
         }
 
+        // _linked_entry_id is not a DB column — strip it from the insert payload
         const created = await createDeduction({
           ...deductionData,
-          organization_id: organization?.id,
-          _linked_entry_id: linkedEntryId
+          organization_id: organization?.id
         });
-        addDeduction(created);
+        // Attach the linked entry ID in local store state only
+        addDeduction({ ...created, _linked_entry_id: linkedEntryId });
         toast.success('Deduction added');
       }
     } catch (e) {
@@ -225,18 +229,24 @@ const Deductions = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Delete this deduction?')) {
       const target = deductions.find(d => d.id === id);
-      try {
-        await deleteDeduction(id);
-      } catch (e) {
-        console.warn('DB delete failed, removing locally:', e.message);
+      const isLocalOnly = typeof id === 'string' && id.startsWith('ded_');
+      if (!isLocalOnly) {
+        try {
+          await deleteDeduction(id);
+        } catch (e) {
+          console.warn('DB delete failed, removing locally:', e.message);
+        }
       }
       removeDeduction(id);
       // Also remove the linked expense entry if one was created by this deduction
       if (target?._linked_entry_id) {
-        try {
-          await deleteEntry(target._linked_entry_id);
-        } catch (entryErr) {
-          console.warn('Could not delete linked expense entry:', entryErr.message);
+        const entryIsLocal = typeof target._linked_entry_id === 'string' && target._linked_entry_id.startsWith('entry_ded_');
+        if (!entryIsLocal) {
+          try {
+            await deleteEntry(target._linked_entry_id);
+          } catch (entryErr) {
+            console.warn('Could not delete linked expense entry:', entryErr.message);
+          }
         }
         removeEntry(target._linked_entry_id);
       }

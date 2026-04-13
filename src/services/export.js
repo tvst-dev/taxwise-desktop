@@ -294,15 +294,15 @@ class ExportService {
       styles: { fontSize: 8, cellPadding: 3.5 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
-        0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 24 },
-        3: { cellWidth: 65 },
-        4: { cellWidth: 22 },
-        5: { cellWidth: 28 },
-        6: { cellWidth: 32, halign: 'right' },
-        7: { cellWidth: 26, halign: 'right' },
-        8: { cellWidth: 22, halign: 'center' }
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 62 },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 26 },
+        6: { cellWidth: 30, halign: 'right' },
+        7: { cellWidth: 24, halign: 'right' },
+        8: { cellWidth: 20, halign: 'center' }
       },
       didDrawPage: (hookData) => {
         // Re-draw header on subsequent pages
