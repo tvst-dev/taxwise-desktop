@@ -879,7 +879,7 @@ const TaxCalculator = () => {
                     <div style={styles.resultItem}>
                       <span style={styles.resultLabel}>Gross Emoluments</span>
                       <span style={styles.resultValue}>
-                        {formatCurrency(result.summary.grossAmount || result.summary.grossMonthlyPay * 12)}
+                        {formatCurrency(result.summary.grossAmount || (result.summary.grossMonthlyPay || 0) * 12)}
                       </span>
                     </div>
                     <div style={styles.resultItem}>
@@ -891,7 +891,7 @@ const TaxCalculator = () => {
                     <div style={styles.resultItem}>
                       <span style={styles.resultLabel}>CRA</span>
                       <span style={styles.resultValueNegative}>
-                        - {formatCurrency(result.summary.totalReliefs || result.calculation?.consolidatedReliefAllowance?.total)}
+                        - {formatCurrency(result.summary.totalReliefs || result.calculation?.annualCalculation?.consolidatedReliefAllowance?.total || result.calculation?.consolidatedReliefAllowance?.total)}
                       </span>
                     </div>
                     <div style={styles.resultItem}>

@@ -13,6 +13,7 @@ import { applyFeatureFlags } from './utils/featureFlags';
 // Layout
 import Layout from './components/Layout/Layout';
 import TitleBar from './components/Layout/TitleBar';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Auth Pages
 import LoginPage from './components/Auth/LoginPage';
@@ -69,6 +70,16 @@ function App() {
   const { login, logout, setLoading, isLoading, user } = useAuthStore();
 
   useEffect(() => {
+    // Global error handlers to catch unhandled errors and prevent silent crashes
+    const handleWindowError = (event) => {
+      console.error('[Global Error]', event.error);
+    };
+    const handleUnhandledRejection = (event) => {
+      console.error('[Unhandled Rejection]', event.reason);
+    };
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
     let authSubscription = null;
 
     const initializeApp = async () => {
@@ -130,6 +141,8 @@ function App() {
 
     initializeApp();
     return () => {
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       authSubscription?.unsubscribe();
       if (authSubscription?._keepalive) clearInterval(authSubscription._keepalive);
     };
@@ -225,58 +238,60 @@ function App() {
   }
 
   return (
-    <div style={styles.appContainer}>
-      <TitleBar />
-      <div style={styles.mainContent}>
-        <HashRouter>
-          <Routes>
-            {/* Public Auth Routes */}
-            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-            <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-            <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
+    <ErrorBoundary>
+      <div style={styles.appContainer}>
+        <TitleBar />
+        <div style={styles.mainContent}>
+          <HashRouter>
+            <Routes>
+              {/* Public Auth Routes */}
+              <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+              <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+              <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* Protected App Routes */}
-            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="entries" element={<Entries />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="cash-flow" element={<CashFlow />} />
-              <Route path="calculator" element={<TaxCalculator />} />
-              <Route path="history" element={<TaxHistory />} />
-              <Route path="deductions" element={<Deductions />} />
-              <Route path="reminders" element={<Reminders />} />
-              <Route path="audit" element={<Audit />} />
-              <Route path="documents" element={<Documents />} />
-              <Route path="pos" element={<POSSales />} />
-              <Route path="api" element={<API />} />
-              <Route path="team" element={<Team />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
+              {/* Protected App Routes */}
+              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="entries" element={<Entries />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="cash-flow" element={<CashFlow />} />
+                <Route path="calculator" element={<TaxCalculator />} />
+                <Route path="history" element={<TaxHistory />} />
+                <Route path="deductions" element={<Deductions />} />
+                <Route path="reminders" element={<Reminders />} />
+                <Route path="audit" element={<Audit />} />
+                <Route path="documents" element={<Documents />} />
+                <Route path="pos" element={<POSSales />} />
+                <Route path="api" element={<API />} />
+                <Route path="team" element={<Team />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
 
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </HashRouter>
-      </div>
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </HashRouter>
+        </div>
 
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: { background: '#161B22', color: '#E6EDF3', border: '1px solid #30363D', borderRadius: '8px' },
-          success: { iconTheme: { primary: '#22C55E', secondary: '#161B22' } },
-          error: { iconTheme: { primary: '#EF4444', secondary: '#161B22' } },
-        }}
-      />
-      <UpdateNotification />
-      {showSetPasswordModal && (
-        <SetPasswordModal
-          userName={user?.name || user?.email}
-          onComplete={() => setShowSetPasswordModal(false)}
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: { background: '#161B22', color: '#E6EDF3', border: '1px solid #30363D', borderRadius: '8px' },
+            success: { iconTheme: { primary: '#22C55E', secondary: '#161B22' } },
+            error: { iconTheme: { primary: '#EF4444', secondary: '#161B22' } },
+          }}
         />
-      )}
-    </div>
+        <UpdateNotification />
+        {showSetPasswordModal && (
+          <SetPasswordModal
+            userName={user?.name || user?.email}
+            onComplete={() => setShowSetPasswordModal(false)}
+          />
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
 

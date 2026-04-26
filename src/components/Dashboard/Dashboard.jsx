@@ -46,8 +46,25 @@ const Dashboard = () => {
 
     const totalDeductions = deductions.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
-    const latestCalc = [...calculations].sort((a, b) => new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt))[0];
-    const totalTaxLiability = parseFloat(latestCalc?.net_tax_payable) || 0;
+    // FIX: Check multiple possible field names for tax liability across different tax types
+    const sortedCalcs = [...calculations].sort((a, b) => {
+      const da = new Date(a.created_at || a.createdAt);
+      const db = new Date(b.created_at || b.createdAt);
+      if (isNaN(db.getTime())) return -1;
+      if (isNaN(da.getTime())) return 1;
+      return db - da;
+    });
+    const latestCalc = sortedCalcs[0];
+    const totalTaxLiability = parseFloat(
+      latestCalc?.net_tax_payable ??
+      latestCalc?.netTaxPayable ??
+      latestCalc?.taxDue ??
+      latestCalc?.totalTaxLiability ??
+      latestCalc?.annualPAYE ??
+      latestCalc?.vatPayable ??
+      latestCalc?.whtAmount ??
+      0
+    ) || 0;
 
     const netCashFlow = allTimeIncome - allTimeExpenses;
     const netTaxable = allTimeIncome - totalDeductions;
@@ -73,24 +90,26 @@ const Dashboard = () => {
       .slice(0, 5);
   }, [entries]);
 
-  // Get upcoming reminders
-  const upcomingReminders = getUpcomingReminders(14);
-  const overdueReminders = getOverdueReminders();
+  // FIX: Memoize reminder calls so they do not create new arrays on every render
+  const upcomingReminders = React.useMemo(() => getUpcomingReminders(14), [getUpcomingReminders]);
+  const overdueReminders = React.useMemo(() => getOverdueReminders(), [getOverdueReminders]);
 
+  // FIX: Safe formatCurrency guards against undefined, null, NaN, and non-numeric values
   const formatCurrency = (amount) => {
-    if (amount >= 1000000) {
-      return `₦${(amount / 1000000).toFixed(1)}M`;
-    } else if (amount >= 1000) {
-      return `₦${(amount / 1000).toFixed(0)}K`;
-    }
-    return `₦${amount.toLocaleString()}`;
+    const num = Number(amount);
+    if (!Number.isFinite(num)) return '₦0';
+    if (num >= 1000000) return '₦' + (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return '₦' + (num / 1000).toFixed(0) + 'K';
+    return '₦' + num.toLocaleString();
   };
 
+  // FIX: Safe formatDate guards against invalid dates
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-NG', { 
-      month: 'short', 
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-NG', {
+      month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
