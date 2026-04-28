@@ -1,0 +1,1138 @@
+Build a full-stack production SaaS web application called TaxWise — a Nigerian Tax Management & Compliance System. This is a web app (not desktop) built with React + Vite, Supabase (auth + database + edge functions), and Paystack for payments.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DESIGN SYSTEM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Dark theme only. Professional, clean, finance-grade UI inspired by PayPal's dashboard — not flashy, not gaming-style. Trust-first.
+
+Color palette:
+  Background (deepest):  #060A14
+  Surface (cards/panels): #0D1117
+  Surface elevated:       #161B22
+  Border:                 #21262D / #30363D
+  Text primary:           #E6EDF3
+  Text secondary:         #8B949E
+  Text muted:             #6E7681
+  Accent blue:            #2563EB
+  Accent blue hover:      #1d4ed8
+  Success green:          #22C55E
+  Warning amber:          #F59E0B
+  Error red:              #EF4444
+  Gradient accent:        linear-gradient(135deg, #3B82F6, #8B5CF6)
+
+Typography: Inter (Google Fonts), fallback -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif
+
+Border radius: 8px (inputs/buttons), 10-12px (cards), 16px (modals/large cards)
+
+Sidebar: 240px wide, collapsible to 60px icon-only mode. Dark background #0D1117, border-right #21262D. Logo at top, nav items below, user profile at bottom.
+
+All data tables use alternating row styles with hover states. All forms have proper validation with inline error messages. All buttons have loading states with a spinner.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TECH STACK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Frontend: React 18 + Vite, React Router v6, Zustand (global state), react-hot-toast (notifications), lucide-react (icons), recharts (charts), date-fns
+
+Backend: Supabase (PostgreSQL + Auth + Storage + Edge Functions)
+  - Auth: email/password, email confirmation OFF, password reset via email
+  - Row Level Security (RLS) on all tables
+  - Edge functions: send-invite (Resend SMTP), chat-assistant (OpenAI)
+
+Payments: Paystack (Live mode, NGN)
+  - Inline card charging via Paystack Charge API (server-side, no redirect)
+  - Bank transfer via Paystack virtual accounts
+  - All Paystack calls go through a server-side API (Next.js API routes or Supabase Edge Functions) — NEVER expose secret key to frontend
+  - PAYSTACK_SECRET_KEY stored as environment variable server-side only
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUPABASE DATABASE SCHEMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Table: organizations
+  id uuid PK
+  name text NOT NULL
+  business_type text (sole_proprietor | partnership | limited_company | ngo)
+  tin text (Tax Identification Number)
+  address text
+  phone text
+  email text
+  logo_url text
+  subscription_status text DEFAULT 'pending' (pending | trial | active | past_due | expired | cancelled)
+  subscription_tier text DEFAULT 'startup' (startup | sme | corporate)
+  trial_started_at timestamptz
+  trial_ends_at timestamptz
+  created_at timestamptz DEFAULT now()
+
+Table: users (extends auth.users)
+  id uuid PK REFERENCES auth.users
+  email text
+  first_name text
+  last_name text
+  role text DEFAULT 'owner' (owner | admin | manager | accountant | cashier | viewer)
+  organization_id uuid REFERENCES organizations
+  avatar_url text
+  created_at timestamptz DEFAULT now()
+
+Table: subscriptions
+  id uuid PK
+  organization_id uuid REFERENCES organizations UNIQUE
+  plan text (startup | sme | corporate)
+  status text (active | cancelled | past_due)
+  paystack_reference text
+  current_period_start timestamptz
+  current_period_end timestamptz
+  created_at timestamptz DEFAULT now()
+
+Table: entries
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  entry_type text (income | expense)
+  category text
+  description text
+  amount decimal(15,2)
+  date date
+  status text DEFAULT 'confirmed' (pending | confirmed | reconciled)
+  reference_number text
+  vendor_customer text
+  tax_applicable boolean DEFAULT false
+  vat_amount decimal(15,2)
+  withholding_tax decimal(15,2)
+  receipt_url text
+  created_by uuid REFERENCES users
+  created_at timestamptz DEFAULT now()
+
+Table: tax_calculations
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  tax_type text (paye | cit | vat | wht | stamp_duty)
+  tax_year integer
+  period_month integer (1-12, for VAT/WHT)
+  gross_income decimal(15,2)
+  taxable_income decimal(15,2)
+  total_deductions decimal(15,2)
+  tax_before_relief decimal(15,2)
+  personal_relief decimal(15,2)
+  net_tax_payable decimal(15,2)
+  effective_rate decimal(5,4)
+  breakdown jsonb
+  notes text
+  created_by uuid REFERENCES users
+  created_at timestamptz DEFAULT now()
+
+Table: deductions
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  type text (pension | nhf | nhis | life_insurance | gratuity | mortgage | other)
+  description text
+  amount decimal(15,2)
+  rate decimal(5,4) (percentage if applicable)
+  tax_year integer
+  created_at timestamptz DEFAULT now()
+
+Table: reminders
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  title text
+  description text
+  tax_type text
+  due_date date
+  status text DEFAULT 'active' (active | completed | dismissed)
+  priority text DEFAULT 'medium' (low | medium | high | critical)
+  recurrence text (none | monthly | quarterly | annually)
+  completed_at timestamptz
+  created_at timestamptz DEFAULT now()
+
+Table: bank_accounts
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  bank_name text
+  account_name text
+  account_number text
+  account_type text (current | savings | domiciliary)
+  currency text DEFAULT 'NGN'
+  balance decimal(15,2) DEFAULT 0
+  last_synced_at timestamptz
+  created_at timestamptz DEFAULT now()
+
+Table: bank_transactions
+  id uuid PK
+  bank_account_id uuid REFERENCES bank_accounts
+  organization_id uuid REFERENCES organizations
+  type text (credit | debit)
+  amount decimal(15,2)
+  description text
+  reference text
+  balance_after decimal(15,2)
+  date date
+  reconciled boolean DEFAULT false
+  entry_id uuid REFERENCES entries
+  created_at timestamptz DEFAULT now()
+
+Table: documents
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  name text
+  type text (invoice | receipt | contract | bank_statement | tax_certificate | other)
+  file_url text
+  file_size integer
+  mime_type text
+  status text DEFAULT 'pending' (pending | processing | processed | failed)
+  extracted_data jsonb
+  created_by uuid REFERENCES users
+  created_at timestamptz DEFAULT now()
+
+Table: pos_products
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  name text
+  category text
+  price decimal(15,2)
+  cost_price decimal(15,2)
+  stock_quantity integer DEFAULT 0
+  vat_applicable boolean DEFAULT true
+  active boolean DEFAULT true
+  created_at timestamptz DEFAULT now()
+
+Table: pos_transactions
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  items jsonb (array of {productId, name, price, quantity, vatApplicable})
+  subtotal decimal(15,2)
+  vat_amount decimal(15,2)
+  total decimal(15,2)
+  payment_method text (cash | card | transfer)
+  served_by uuid REFERENCES users
+  created_at timestamptz DEFAULT now()
+
+Table: team_invitations
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  email text
+  role text
+  status text DEFAULT 'pending' (pending | accepted | cancelled | expired)
+  token uuid DEFAULT gen_random_uuid()
+  invited_by uuid REFERENCES users
+  expires_at timestamptz
+  created_at timestamptz DEFAULT now()
+  UNIQUE(organization_id, email)
+
+Table: audit_logs
+  id uuid PK
+  organization_id uuid REFERENCES organizations
+  user_id uuid REFERENCES users
+  action text (created | updated | deleted | exported | calculated | paid)
+  entity_type text
+  entity_id uuid
+  old_data jsonb
+  new_data jsonb
+  ip_address text
+  created_at timestamptz DEFAULT now()
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AUTHENTICATION & ONBOARDING FLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Registration (4 steps — shown as a step wizard):
+  Step 1 — Account: First name, last name, email, password (min 8 chars, must include letter+number), confirm password
+  Step 2 — Business: Business name, business type (dropdown: Sole Proprietor, Partnership, Limited Company, NGO), TIN (optional), business address
+  Step 3 — Choose Plan: Show the 3 subscription plans (see SUBSCRIPTION PLANS below) with a "Start 14-day Free Trial" button — selecting a plan records the intent but does not charge yet
+  Step 4 — Payment: Show the PaymentModal (see PAYMENT MODAL section). On successful payment, subscription_status becomes 'trial', redirect to /dashboard
+
+Login: Email + password. "Forgot password?" link. On successful login load user profile + organization.
+
+Password Reset: Email input → Supabase sends reset email with link → redirects to /reset-password → user sets new password.
+
+Invited Team Members:
+  - Admin sends invite → Supabase edge function generates invite link + sends email via Resend
+  - Invite link opens /accept-invite?token=xxx → set password form → on submit, user is created and added to the organization with the specified role
+
+After login, if subscription_status is 'pending' → redirect to /register step 4 (payment)
+If subscription_status is 'expired' or 'cancelled' → show SubscriptionExpired page with resubscribe button
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUBSCRIPTION PLANS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Startup — 10,000 NGN/month
+  Features: Income & expense tracking, Automated tax calculations, Basic compliance reports,
+  Single business profile, Document AI Extraction (10 uploads/month), 50 tax calculations/month, 1 user
+  Feature flags: posEnabled=false, multiUserEnabled=false, apiAccessEnabled=false, autoBankTrackingEnabled=false
+
+SME — 25,000 NGN/month  [MOST POPULAR badge]
+  Features: Everything in Startup, Audit-ready reports, Multi-income streams,
+  Export-ready documentation, Compliance reminders, Up to 5 users (accountant access),
+  POS Sales Tracking, Bank Account Integration (1 account), 100 calculations/month, 50 document uploads/month
+  Feature flags: posEnabled=true, multiUserEnabled=true, apiAccessEnabled=false, autoBankTrackingEnabled=true
+
+Corporate — 60,000 NGN/month
+  Features: Everything in SME, Multi-user roles & permissions, Advanced analytics,
+  API integrations, Priority support, Unlimited users, Unlimited calculations,
+  10 bank accounts, Unlimited document uploads
+  Feature flags: posEnabled=true, multiUserEnabled=true, apiAccessEnabled=true, autoBankTrackingEnabled=true
+
+All plans start with a 14-day free trial. Trial begins on first successful payment verification.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAYMENT MODAL (Critical — implement exactly)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The payment modal has 3 views: plans, checkout, success.
+
+PLANS VIEW:
+  Grid of 3 plan cards. Each card shows: name, price (large), feature list with green checkmarks,
+  "Select Plan" / "Continue" button. SME has "Most Popular" badge in top-right corner.
+  Selected card has blue border and subtle blue background.
+
+CHECKOUT VIEW:
+  Shows selected plan name + price at top.
+  Below it shows the PaymentForm component.
+
+SUCCESS VIEW:
+  Animated green checkmark ring, "Trial Started!" or "Payment Successful!" heading,
+  brief message, "Go to Dashboard" button.
+
+PAYMENTFORM COMPONENT (inline — no Paystack popup for cards):
+
+State machine steps: method → card OR bank → pin (card only) → otp (card only) → verifying → success
+
+Method Selection Screen:
+  - Amount display box at top showing total due
+  - "Debit / Credit Card" button with CreditCard icon and "Visa · Mastercard · Verve" subtitle
+  - "Bank Transfer" button with Building2 icon and "Get a virtual account number instantly" subtitle
+  - Green security bar at bottom: "All transactions secured by Paystack · PCI DSS Level 1"
+
+Card Payment Screen:
+  - Green security bar: "256-bit encrypted · PCI DSS compliant · Paystack"
+  - Amount due display box
+  - Card Number field (auto-formats to XXXX XXXX XXXX XXXX as user types,
+    auto-detects card brand: Visa starts with 4, Mastercard starts with 5[1-5],
+    Verve starts with 506x/6500/650x — show colored brand badge next to field)
+  - Cardholder Name field
+  - Expiry Date (MM/YY format) + CVV (with show/hide eye toggle) side by side
+  - Submit button with spinner loading state
+  - Back button
+
+Card Flow (all API calls go to your server-side routes with PAYSTACK_SECRET_KEY):
+  1. POST /api/paystack/charge-card with { email, amount_in_kobo, card: {number, cvv, expiry_month, expiry_year}, metadata }
+  2. Handle Paystack response status:
+       "send_pin"  → show PIN entry screen (large centered 4-digit PIN input, password type)
+       "send_otp"  → show OTP entry screen (6-digit input, show display_text as hint)
+       "open_url"  → show "Open Authentication Page" button (opens URL in new tab) + poll every 5s + "I've completed authentication" submit button
+       "success"   → call finalize(reference)
+       anything else → show gateway_response as red error toast, stay on card screen
+  3. PIN screen: POST /api/paystack/submit-pin with { reference, pin } → handleChargeResponse again
+  4. OTP screen: POST /api/paystack/submit-otp with { reference, otp } → handleChargeResponse again
+
+Bank Transfer Flow:
+  1. POST /api/paystack/init-transaction with { email, amount_in_kobo, channels: ['bank_transfer'], metadata }
+     Response: { authUrl, reference }
+  2. Open authUrl in a modal popup/iframe window (Paystack shows the virtual account number to transfer to)
+  3. Simultaneously start polling GET /api/paystack/verify/:reference every 5 seconds in the background
+  4. When poll detects status === "success":
+       - Close the popup window programmatically
+       - Call finalize(reference)
+  5. If user closes popup before payment confirmed:
+       - Do one final verify check
+       - If confirmed: finalize(reference)
+       - If not confirmed: show toast "Transfer cancelled or not yet confirmed", reset to method screen
+
+finalize(reference) function:
+  1. GET /api/paystack/verify/:reference — confirm status === "success"
+  2. UPDATE organizations SET subscription_status='trial', subscription_tier=selectedPlan,
+     trial_started_at=now(), trial_ends_at=now()+14days WHERE id=organizationId
+  3. UPSERT subscriptions (organization_id, plan, status='active', paystack_reference, period dates)
+  4. Immediately update in-memory auth store: updateOrganization({ subscription_status: 'trial', subscription_tier: plan, trial_ends_at })
+  5. Immediately apply feature flags for the new tier (do NOT require re-login)
+  6. Show success view
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FEATURE FLAGS & ROLE PERMISSIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After login and after payment, apply feature flags based on subscription_tier:
+
+startup:
+  posEnabled=false, multiUserEnabled=false, apiAccessEnabled=false,
+  autoBankTrackingEnabled=false, documentAIEnabled=true,
+  maxUsers=1, maxBankAccounts=0, monthlyCalculations=50, documentUploads=10
+
+sme:
+  posEnabled=true, multiUserEnabled=true, apiAccessEnabled=false,
+  autoBankTrackingEnabled=true, documentAIEnabled=true,
+  maxUsers=5, maxBankAccounts=1, monthlyCalculations=100, documentUploads=50
+
+corporate:
+  posEnabled=true, multiUserEnabled=true, apiAccessEnabled=true,
+  autoBankTrackingEnabled=true, documentAIEnabled=true,
+  maxUsers=unlimited, maxBankAccounts=10, monthlyCalculations=unlimited, documentUploads=unlimited
+
+Role permissions:
+  owner / admin   → all actions
+  manager         → view, create, edit, approve, export, calculate, pos, team_view
+  accountant      → view, create, edit, export, calculate
+  cashier         → view, create, pos
+  viewer          → view only
+
+Locked features: show a padlock icon overlay with "Upgrade Plan" tooltip/button that opens subscription modal.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TAX CALCULATION LOGIC (Nigeria — implement exactly)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─── PAYE (Pay As You Earn) ───────────────────────────────────────────────────
+
+Step 1: Compute Gross Income
+  gross = basic salary + housing allowance + transport allowance + other allowances
+
+Step 2: Compute Statutory Deductions (reduce taxable income)
+  Pension    = 8% of (basic + housing + transport), minimum NGN 1 — employee contribution
+  NHF        = 2.5% of basic salary
+  NHIS       = 5% of gross (optional, user toggles)
+  Life Insurance = actual premium paid (optional, user enters amount)
+
+Step 3: Compute Gross Taxable Income (GTI)
+  GTI = gross income - total statutory deductions
+
+Step 4: Compute Consolidated Relief Allowance (CRA)
+  CRA = higher of (NGN 200,000 OR 1% of GTI)  +  20% of GTI
+
+Step 5: Compute Taxable Income
+  taxable_income = GTI - CRA
+  (if taxable_income < 0, set to 0)
+
+Step 6: Apply Progressive Tax Bands (annual amounts)
+  First  NGN 300,000      → 7%
+  Next   NGN 300,000      → 11%
+  Next   NGN 500,000      → 15%
+  Next   NGN 500,000      → 19%
+  Next   NGN 1,600,000    → 21%
+  Above  NGN 3,200,000    → 24%
+
+Step 7: Monthly PAYE = annual tax / 12
+
+Display full breakdown:
+  Gross Income, Pension deduction, NHF deduction, NHIS deduction, Life Insurance deduction,
+  Total Deductions, GTI, CRA calculation (show both options and which was higher),
+  Taxable Income, tax per band (show each band and amount applied),
+  Total Annual Tax, Monthly PAYE, Take-home Pay (gross - pension - NHF - NHIS - monthly PAYE),
+  Effective Tax Rate %
+
+
+─── CIT (Companies Income Tax) ──────────────────────────────────────────────
+
+Only applicable to Limited Companies.
+
+Company size by annual turnover:
+  Small   (turnover < NGN 25,000,000/year):          0% CIT (exempt)
+  Medium  (NGN 25,000,000 to NGN 100,000,000/year): 20% CIT
+  Large   (turnover > NGN 100,000,000/year):         30% CIT
+
+Education Tax (applies to all companies regardless of size): 2.5% of assessable profit
+
+Steps:
+  1. Inputs: total annual revenue, total allowable expenses
+  2. Profit before tax = revenue - expenses
+  3. Determine company size band from revenue
+  4. CIT = profit before tax x applicable CIT rate
+  5. Education Tax = profit before tax x 2.5%
+  6. Total Tax Payable = CIT + Education Tax
+
+Display: Revenue, Expenses, Profit Before Tax, Company Size Category,
+  CIT Rate, CIT Amount, Education Tax (2.5%), Total Tax Payable, Effective Rate %
+
+
+─── VAT (Value Added Tax) ───────────────────────────────────────────────────
+
+Rate: 7.5% (Nigeria Finance Act 2020)
+
+Mode A — Simple Sales VAT:
+  User enters sales amount and chooses: VAT-exclusive or VAT-inclusive
+  VAT-exclusive: VAT = amount x 0.075 | Total Invoice = amount + VAT
+  VAT-inclusive: VAT = amount x (0.075 / 1.075) | Net = amount - VAT
+
+Mode B — VAT Return (Input/Output):
+  Output VAT = total VAT charged to customers on sales
+  Input VAT  = total VAT paid on business purchases
+  Net VAT Payable = Output VAT - Input VAT
+  (positive = remit to FIRS; negative = VAT credit/refund claim)
+
+Filing frequency: monthly
+Display: Period (month/year), Output VAT, Input VAT, Net VAT Payable/Refundable,
+  Filing deadline (21st of following month)
+
+
+─── WHT (Withholding Tax) ────────────────────────────────────────────────────
+
+WHT rates by payment/transaction type:
+  Dividends                               10%
+  Interest                                10%
+  Rent (companies)                        10%
+  Rent (individuals)                      10%
+  Royalties                               10%
+  Directors fees                          10%
+  Commissions (companies)                 10%
+  Commissions (individuals)               5%
+  Management / Consulting fees            10%
+  Technical / Professional services fees  10%
+  Construction contracts                  5%
+  Supply of goods / materials             5%
+  Agency arrangements                     5%
+
+Inputs:
+  Transaction type (dropdown with all types above)
+  Gross payment amount
+  Payer type (Individual / Company)
+
+Outputs:
+  WHT Amount = gross x rate
+  Net Payment After WHT = gross - WHT
+  Remittance deadline = 21st of the month following deduction
+
+
+─── Stamp Duty ──────────────────────────────────────────────────────────────
+
+Tenancy / Lease Agreements:
+  Up to 7 years:       0.78% of total rent
+  7 to 21 years:       3% of total rent
+  Above 21 years:      6% of total rent
+
+Share Transfer:        1.5% of transaction value
+
+Receipt / Acknowledgment (amount > NGN 10,000):  NGN 50 flat fee
+
+
+─── Auto-Create Reminders after saving calculations ─────────────────────────
+
+After user saves any tax calculation, auto-create a reminder with:
+  VAT calculation saved  → reminder: "VAT Filing Due" on 21st of following month, priority=high
+  WHT calculation saved  → reminder: "WHT Remittance Due" on 21st of following month, priority=high
+  PAYE calculation saved → reminder: "PAYE Remittance Due" on 10th of following month, priority=high
+  CIT calculation saved  → reminder: "CIT Filing Due" on last day of 6th month after company year-end, priority=critical
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+APP PAGES & FEATURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─── 1. DASHBOARD (/dashboard) ────────────────────────────────────────────────
+
+Top KPI cards (4 across, with trend arrows and percentage change vs last month):
+  Total Income (current month)     — green, TrendingUp icon
+  Total Expenses (current month)   — red, TrendingDown icon
+  Net Cash Flow                    — blue, income minus expenses
+  Tax Liability (month)            — amber, sum of all taxes calculated this month
+
+Income vs Expenses Bar Chart: grouped monthly bars for last 6 months (recharts BarChart)
+
+Tax Summary Donut Chart: PAYE / VAT / WHT / CIT breakdown for current year (recharts PieChart with legend)
+
+Upcoming Tax Deadlines widget: next 5 reminders sorted by due_date, each with:
+  tax type badge, title, due date, days remaining countdown chip
+  color coded: red=overdue, amber=due within 3 days, blue=due within 7 days
+
+Recent Transactions widget: last 10 entries, columns: type badge, description, amount, date
+
+Quick Action buttons row: + Add Income | + Add Expense | Calculate Tax | + Add Reminder
+
+
+─── 2. INCOME & EXPENSES (/entries) ─────────────────────────────────────────
+
+Summary cards at top: Total Income | Total Expenses | Net | VAT Collected | WHT Deducted
+
+Tabs: All | Income | Expenses
+
+Filters bar: date range picker | category dropdown | status filter | search input
+
+Data table columns: Date | Type | Category | Description | Vendor/Customer | Amount | VAT | Status | Actions
+
+Row actions: Edit (pencil icon) | Delete (trash icon, with confirmation) | View receipt (if attached)
+
+Bulk actions: select multiple rows → bulk delete or bulk export
+
+Add / Edit Entry modal:
+  Entry type toggle (Income / Expense)
+  Date picker
+  Category dropdown:
+    Income: Sales Revenue, Service Income, Rental Income, Investment Income, Grant/Donation, Other
+    Expense: Salaries & Wages, Rent, Utilities, Equipment & Assets, Marketing & Advertising,
+             Professional Fees, Tax Payments, Transport, Repairs & Maintenance, Other
+  Description (textarea, required)
+  Vendor / Customer name
+  Amount (NGN, required — formatted with comma separator as user types)
+  VAT applicable toggle — if ON: auto-show VAT amount field (7.5% of amount, editable)
+  WHT applicable toggle — if ON: show WHT type dropdown + auto-calculate WHT amount
+  Reference Number (optional)
+  Attach Receipt: file upload button → uploads to Supabase Storage, shows preview thumbnail
+
+Bulk CSV import button: download template | upload CSV | preview before import | confirm import
+
+Export button: Export to Excel (.xlsx) | Export to CSV
+
+
+─── 3. TAX CALCULATOR (/calculator) ─────────────────────────────────────────
+
+Tab switcher at top: PAYE | CIT | VAT | WHT | Stamp Duty
+
+Two-column layout: form on left, results panel on right (sticky on scroll)
+
+Real-time calculation: results update as user types (300ms debounce)
+
+Results panel:
+  Each line item shown with label and value, alternating subtle background
+  Final Tax Payable: large font, prominent, colored accent
+  Effective Rate: shown as percentage with a progress bar
+  "Save Calculation" button — saves to tax_calculations table, optionally creates auto-reminder
+  "Export PDF" button — generates formatted tax computation report with org header/footer
+
+PAYE form: basic salary, housing allowance, transport allowance, other allowances,
+  pension toggle (auto 8%), NHF toggle (auto 2.5%), NHIS toggle, life insurance amount
+
+CIT form: annual revenue, allowable expenses, company year-end month
+
+VAT form: mode toggle (Simple / Return), then mode-specific fields
+
+WHT form: transaction type dropdown, gross amount, payer type radio
+
+Stamp Duty form: transaction type dropdown, amount/duration fields based on type
+
+
+─── 4. TAX HISTORY (/history) ───────────────────────────────────────────────
+
+Summary panel at top: total tax paid YTD per type (4 mini cards), bar chart by month
+
+Filter bar: tax type dropdown | year selector | search
+
+Table columns: Date | Tax Type badge | Period | Taxable Income | Tax Payable | Effective Rate | Actions
+
+Row actions: View Details (expand inline accordion with full breakdown JSON rendered nicely) | Download PDF | Delete (with confirmation)
+
+
+─── 5. DEDUCTIONS (/deductions) ─────────────────────────────────────────────
+
+Active deductions shown as cards with type, description, amount/rate, tax year
+
+Default deduction types with toggle: Pension (8%), NHF (2.5%), NHIS (5%)
+Custom deductions: Life Insurance (amount), Gratuity (amount), Mortgage Interest (amount), Other
+
+Add / Edit Deduction modal: type, description, amount or rate, tax year
+
+Total Deductions Summary box
+
+These deductions are used automatically when computing PAYE
+
+
+─── 6. COMPLIANCE REMINDERS (/reminders) ────────────────────────────────────
+
+Toggle: Calendar view | List view
+
+Calendar view: month grid with colored dots on due dates, click day to see reminders
+
+List view: reminder cards grouped by status (Overdue | Due Soon | Upcoming | Completed)
+
+Reminder card: left color bar (priority), title, tax type badge, due date, days-remaining chip,
+  description snippet, action buttons: Mark Complete | Dismiss | Edit | Delete
+
+Priority colors: critical=red, high=amber, medium=blue, low=gray
+
+Add Reminder modal:
+  Title, description, tax type, due date picker, priority selector, recurrence
+  (none | monthly | quarterly | annually)
+
+Filter by: status | tax type | priority | date range
+
+
+─── 7. DOCUMENTS (/documents) ───────────────────────────────────────────────
+
+Upload area at top: dashed border drag-and-drop zone with cloud upload icon,
+  "Drag files here or click to browse" text, accepts PDF, JPG, PNG, XLSX
+
+After upload: file is saved to Supabase Storage, status set to 'processing',
+  AI extraction triggered (calls edge function 'extract-document' using OpenAI GPT-4o Vision)
+  Status updates to 'processed' when done, or 'failed' on error
+
+Document grid/list view toggle
+
+Document card shows: file type icon, filename, type badge, status chip, upload date, file size
+
+Click document to open detail panel (right slide-in):
+  File preview (PDF viewer or image)
+  Extracted data shown as structured key-value pairs
+  For invoices/receipts: vendor, date, line items, subtotal, VAT, total
+  For bank statements: transaction list
+  For tax certificates: tax type, period, amount, TIN
+  Actions: Download | Re-extract | Delete
+  "Create Entry from Document" button — pre-fills entry form with extracted data
+
+Filter by: type | status | date range
+
+Plan limit indicator: "8/10 uploads used this month" with progress bar
+
+
+─── 8. BANK ACCOUNTS (/bank-accounts) ───────────────────────────────────────
+
+Available on SME+ plans only. Startup sees locked upgrade prompt.
+
+Account cards: bank logo + name, masked account number (last 4 digits shown),
+  account type badge, currency, current balance (large), last synced date
+
+Add Account button → modal: bank name dropdown (all Nigerian banks), account name,
+  account number, account type, opening balance
+
+Click account card → opens account detail view:
+  Balance history line chart (last 3 months)
+  Transactions table: date | description | type (credit/debit) | amount | balance after | reconciled checkbox
+  Import Transactions button: CSV upload from bank statement, auto-parses common bank statement formats
+  Reconcile button per transaction: match to an existing entry or create new entry from transaction
+  Reconciled transactions shown with green checkmark
+
+Balance summary: total across all accounts
+
+
+─── 9. POS SALES (/pos) ─────────────────────────────────────────────────────
+
+Available on SME+ plans only. Startup sees locked upgrade prompt.
+
+Tabs: Point of Sale | Manage Products | Sales History
+
+POINT OF SALE tab — two-panel layout:
+
+Left panel (products):
+  Category filter tabs at top (show all categories as horizontal scrollable tabs)
+  Search products input
+  Product grid: cards with product name, price, stock badge (red if low stock < 5)
+  Click product to add to cart (or increment quantity if already in cart)
+
+Right panel (cart / order):
+  Cart items list: product name, quantity control (minus/plus buttons), unit price, line total, remove button
+  Empty cart state: shopping cart icon, "Cart is empty" text
+  Order summary section:
+    Subtotal
+    VAT (7.5% on VAT-applicable items only, shown as line item)
+    Total (large, prominent)
+  Payment method selector: Cash | Card | Transfer (styled toggle buttons)
+  "Complete Sale" button (blue, full width):
+    Saves pos_transaction to DB
+    Decrements stock_quantity for each product
+    Creates income entry in entries table (category: Sales Revenue)
+    Shows receipt modal (printable)
+  Receipt modal: business name, date/time, items list, subtotal, VAT, total, payment method, served by
+
+MANAGE PRODUCTS tab:
+  Table: image | name | category | price | cost price | stock | VAT | status | actions
+  Add Product modal: name, category, price, cost price, initial stock, VAT applicable toggle, active toggle
+  Edit / Delete actions per row
+
+SALES HISTORY tab:
+  Table: date/time | items count | subtotal | VAT | total | payment method | served by | actions
+  Click row to expand and see full line items
+  Filter by date range, payment method
+  Export to CSV
+
+
+─── 10. TEAM (/team) ────────────────────────────────────────────────────────
+
+Available on SME+ plans only.
+
+Members table:
+  Avatar (initials if no photo) | Full Name | Email | Role badge | Joined date | Status | Actions
+  Role badges: Owner=purple, Admin=blue, Manager=teal, Accountant=green, Cashier=amber, Viewer=gray
+
+"Invite Member" button → modal:
+  Email input, Role selector (dropdown with role descriptions for each)
+  "Send Invite" → calls Supabase edge function 'send-invite'
+  Success: shows confirmation "Invite sent to email@example.com"
+
+Pending Invitations section (below members table):
+  Email | Role | Sent date | Expires | Cancel button
+
+Actions per member row: Change Role (dropdown) | Remove Member (with confirmation dialog)
+  Owner cannot be changed or removed
+  User cannot change their own role
+
+Plan limit indicator: "3/5 users" with progress bar (SME plan)
+
+
+─── 11. ANALYTICS (/analytics) ──────────────────────────────────────────────
+
+Date range selector with presets: This Month | Last Month | This Quarter | This Year | Custom
+
+All charts use recharts with the app dark color theme (dark backgrounds, colored series)
+
+Charts:
+  Income vs Expenses Trend: line chart, monthly points, last 12 months
+  Top Expense Categories: horizontal bar chart, top 8 categories by total
+  Tax Liability by Type: stacked bar chart (PAYE/VAT/WHT/CIT per month)
+  Revenue Growth: area chart with MoM % change annotated
+  Cash Flow Waterfall: waterfall chart showing opening → income → expenses → taxes → closing
+
+Export Report button: generates full analytics PDF with all charts and summary table
+
+
+─── 12. CASH FLOW (/cash-flow) ──────────────────────────────────────────────
+
+Monthly cash flow statement — styled like an accounting statement:
+
+  OPENING BALANCE                    NGN xxx,xxx
+
+  INFLOWS
+    Sales Revenue                    NGN xxx,xxx
+    Service Income                   NGN xxx,xxx
+    Other Income                     NGN xxx,xxx
+  Total Inflows                      NGN xxx,xxx
+
+  OUTFLOWS
+    Salaries & Wages                (NGN xxx,xxx)
+    Rent                            (NGN xxx,xxx)
+    Tax Payments                    (NGN xxx,xxx)
+    Other Expenses                  (NGN xxx,xxx)
+  Total Outflows                    (NGN xxx,xxx)
+
+  NET CASH FLOW                      NGN xxx,xxx
+  CLOSING BALANCE                    NGN xxx,xxx
+
+Month selector to navigate between months
+
+Net Cash Flow bar chart: 12-month view, green bars=positive, red bars=negative
+
+Projected section: extrapolates next 3 months based on 3-month average with disclaimer
+
+Export to PDF/Excel
+
+
+─── 13. AUDIT TRAIL (/audit) ────────────────────────────────────────────────
+
+Immutable append-only log of all significant actions
+
+Table columns: Timestamp | User (avatar+name) | Action badge | Entity Type | Description | IP Address
+
+Action badge colors: created=green, updated=blue, deleted=red, exported=purple, calculated=teal, paid=gold
+
+Events logged automatically:
+  Entry created / updated / deleted
+  Tax calculation saved
+  Payment made / subscription changed
+  Team member invited / role changed / removed
+  Document uploaded / extracted
+  Settings updated
+  User login / logout
+
+Filter bar: user dropdown | action type | entity type | date range
+
+Export Audit Log as CSV button
+
+
+─── 14. AI CHAT ASSISTANT (floating widget, all pages) ──────────────────────
+
+Floating action button: bottom-right corner, gradient blue-purple (#3B82F6 to #8B5CF6),
+  chat bubble icon, subtle pulse animation
+
+Click opens a 380px wide slide-in panel from the right edge
+
+Chat panel header: gradient icon, "TaxWise AI" title, online green dot, close button
+
+Message bubbles:
+  User messages: right-aligned, blue background
+  AI messages: left-aligned, dark surface background, with small logo avatar
+  Timestamps on each message
+
+Input area: text input with send button (Enter to send, Shift+Enter for newline)
+
+Typing indicator: animated dots while AI is responding
+
+The assistant has access to the user's context (business type, subscription tier,
+  recent summary stats) via system prompt.
+
+It can answer:
+  Nigerian tax questions with exact rates and computations
+  Explain any calculation result in the app
+  Compliance advice and deadline reminders
+  Spending pattern analysis based on current month data
+  How to use TaxWise features
+
+Calls Supabase edge function 'chat-assistant' which proxies to OpenAI GPT-4o.
+Messages persist in component state only (not stored in database).
+
+
+─── 15. SETTINGS (/settings) ────────────────────────────────────────────────
+
+Tab navigation: General | Notifications | Security | Subscription | API Access | Integrations
+
+GENERAL tab:
+  Business name, business type dropdown, TIN, address, phone
+  Logo upload: drag-drop or click, preview displayed, saves to Supabase Storage
+  Currency (NGN, display only), date format selector, timezone (Africa/Lagos default),
+  fiscal year start month selector
+
+NOTIFICATIONS tab:
+  Email reminders toggle
+  Push notifications toggle
+  Reminder lead time selector (notify me N days before: 1 / 3 / 7 / 14)
+  Weekly summary email toggle
+  Monthly report email toggle
+
+SECURITY tab:
+  Change Password form: current password + new password + confirm new password
+  Active Sessions list: device info, last active date, "Revoke" button per session
+
+SUBSCRIPTION tab:
+  Current plan card: plan name, status badge, trial end date or renewal date
+  Usage meters with progress bars:
+    Tax Calculations: used / monthly limit
+    Document Uploads: used / monthly limit
+    Team Members: used / limit
+  "Upgrade Plan" button → opens subscription modal
+  "Cancel Subscription" text link → confirmation dialog → cancels (sets status to cancelled at period end)
+
+API ACCESS tab (Corporate plan only, shows upgrade prompt for others):
+  Current API key display: masked (show/hide toggle) + copy button
+  "Regenerate API Key" button with confirmation
+  Usage stats: requests today, requests this month, rate limit info
+  API documentation link
+
+INTEGRATIONS tab:
+  Auto Bank Tracking toggle (SME+ only): enables automatic transaction matching
+  OpenAI status indicator (shows connected if OPENAI_API_KEY is configured)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NAVIGATION SIDEBAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Logo section at top: gradient square icon with "T", "TaxWise" text in white bold
+
+Nav items (icon + label, in this order):
+  Dashboard         LayoutDashboard icon
+  Entries           BookOpen icon
+  Tax Calculator    Calculator icon
+  Tax History       History icon
+  Deductions        Percent icon
+  Reminders         Bell icon  (show count badge for overdue/due-soon reminders)
+  Cash Flow         TrendingUp icon
+  Documents         FileText icon
+  Bank Accounts     Building2 icon    (lock icon + "SME+" tag for Startup plan)
+  POS Sales         ShoppingCart icon (lock icon + "SME+" tag for Startup plan)
+  Analytics         BarChart2 icon
+  Audit Trail       Shield icon
+  Team              Users icon        (lock icon + "SME+" tag for Startup plan)
+  ── divider ──
+  Settings          Settings icon
+  Help / Support    HelpCircle icon → opens chat widget or support email
+
+Active nav item styling: 2px left border in #2563EB, background rgba(37,99,235,0.1), text #E6EDF3
+
+Hover styling: background rgba(255,255,255,0.05), text #E6EDF3
+
+Collapse button at bottom of nav: chevron left/right icon, toggles sidebar between 240px and 60px
+  In collapsed mode: only icons shown, tooltips on hover showing page name
+
+User profile section at very bottom of sidebar:
+  Avatar circle (initials if no photo, gradient background)
+  Full name (bold)
+  Role badge
+  Logout button (LogOut icon)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUBSCRIPTION EXPIRED PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Shown full-screen (no sidebar) when subscription_status is 'expired' or 'cancelled'.
+
+Centered layout:
+  AlertCircle icon (large, amber)
+  Heading: "Your subscription has ended"
+  Subtext: "Renew to continue accessing TaxWise. Your data is safe and will be fully restored on renewal."
+  Trial end date or last active date shown in muted text
+  "Renew Subscription" primary button → opens subscription modal
+  "Contact Support" secondary link
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SERVER-SIDE API ROUTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All Paystack API calls MUST go through server-side routes.
+PAYSTACK_SECRET_KEY must NEVER be sent to or accessible from the browser.
+
+POST /api/paystack/init-transaction
+  Body: { email, amount (NGN), channels (array), metadata (object) }
+  Server: converts amount to kobo (x100), calls Paystack /transaction/initialize
+  Returns: { status, authUrl, accessCode, reference }
+
+POST /api/paystack/charge-card
+  Body: { email, amount (kobo), card: { number, cvv, expiry_month, expiry_year }, metadata }
+  Server: calls Paystack /charge
+  Returns Paystack response as-is
+
+POST /api/paystack/submit-pin
+  Body: { reference, pin }
+  Server: calls Paystack /charge/submit_pin
+  Returns Paystack response as-is
+
+POST /api/paystack/submit-otp
+  Body: { reference, otp }
+  Server: calls Paystack /charge/submit_otp
+  Returns Paystack response as-is
+
+GET /api/paystack/verify/:reference
+  Server: calls Paystack /transaction/verify/:reference
+  Returns transaction data
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUPABASE EDGE FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Function: send-invite
+  Triggered by frontend (anon key auth — use SUPABASE_ANON_KEY as Bearer token)
+  Inputs: { email, role, organizationId, organizationName, inviterName }
+  Process:
+    Use SUPABASE_SERVICE_ROLE_KEY to call supabase.auth.admin.generateLink({ type: 'invite', email, options: { redirectTo: 'https://www.taxwise.com.ng', data: { organization_id, role, ... } } })
+    If user already exists and unconfirmed: delete user, retry generateLink
+    If user already exists and confirmed: return 409 error
+    Send styled HTML email via Resend API
+    Upsert record in team_invitations table
+  Email: dark theme HTML, TaxWise logo, inviter name, org name, role, "Accept Invitation" button
+
+Function: extract-document
+  Triggered by frontend (user access_token auth)
+  Inputs: { imageBase64, mimeType, documentType }
+  Process:
+    Calls OpenAI GPT-4o with the image and a structured extraction prompt
+    Returns extracted fields as JSON based on document type
+  Requires: OPENAI_API_KEY env var
+
+Function: chat-assistant
+  Triggered by frontend (user access_token auth)
+  Inputs: { messages (last 10), context: { businessType, subscriptionTier, currentMonthIncome, currentMonthExpenses } }
+  Process:
+    Builds system prompt with Nigerian tax expertise + user's business context
+    Calls OpenAI GPT-4o with messages array
+    Returns { reply: string }
+  Requires: OPENAI_API_KEY env var
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GLOBAL STATE MANAGEMENT (Zustand)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+useAuthStore (persisted as 'taxwise-auth'):
+  user: { id, email, name, firstName, lastName, role, avatar }
+  organization: { id, name, business_type, tin, subscription_status, subscription_tier, trial_ends_at }
+  isAuthenticated, isLoading
+  Actions: login(user, org), logout(), updateUser(updates), updateOrganization(updates), setLoading()
+
+useFeaturesStore (persisted as 'taxwise-features'):
+  posEnabled, multiUserEnabled, apiAccessEnabled, autoBankTrackingEnabled, documentAIEnabled
+  featureLimits: { maxUsers, maxBankAccounts, monthlyCalculations, documentUploads }
+  Actions: setFeature(key, value), setFeatureLimits(limits)
+  applyFeatureFlags(tier) utility function: reads TIER_CONFIGS and updates store — call after login and after payment
+
+useEntriesStore (persisted as 'taxwise-entries'):
+  entries[], filters, pagination
+  Actions: setEntries, addEntry, updateEntry, removeEntry, setFilters
+
+useTaxStore (persisted as 'taxwise-tax'):
+  calculations[]
+  Actions: setCalculations, addCalculation, updateCalculation, removeCalculation
+
+useDeductionsStore (persisted as 'taxwise-deductions'):
+  deductions[]
+
+useRemindersStore (persisted as 'taxwise-reminders'):
+  reminders[]
+
+useBankStore (persisted as 'taxwise-bank'):
+  accounts[], transactions[]
+
+useDocumentsStore (persisted as 'taxwise-documents'):
+  documents[] (persist metadata only, not file blobs)
+
+usePOSStore (persisted as 'taxwise-pos'):
+  products[], cart[], transactions[]
+
+useTeamStore (persisted as 'taxwise-team'):
+  members[], invitations[]
+
+useUIStore (NOT persisted):
+  sidebarCollapsed, activeModal, modalData, modalStack[], notifications[]
+  Actions: openModal(name, data), closeModal(), closeAllModals(), addNotification(), toggleSidebar()
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MISC REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Currency formatting:
+  All NGN amounts displayed as: NGN 1,250,000.00 or with Naira symbol NGN prefix
+  Use a formatNGN(amount) utility function consistently throughout the app
+
+Date formatting:
+  Display all dates as DD/MM/YYYY throughout the app
+  Use date-fns for all date operations
+
+PDF generation:
+  Use jsPDF + jspdf-autotable for all PDF exports
+  Every PDF includes: TaxWise logo, organization name, TIN, report title, date generated,
+  branded header with gradient bar, footer with page numbers
+
+Loading states:
+  Every data-fetching operation shows skeleton loaders (animated gray placeholder bars)
+  Never show blank content while loading
+
+Empty states:
+  Every list, table, and grid has a thoughtful empty state with:
+  Relevant icon (large, muted), heading ("No entries yet"), helpful subtext,
+  Primary action button to add first item
+
+Error handling:
+  All Supabase errors and API errors are caught and shown via react-hot-toast
+  Network errors show a toast with a "Retry" action
+
+Responsive design:
+  Fully functional on screens 768px and wider
+  Sidebar auto-collapses to icon-only on screens narrower than 1024px
+  Mobile: sidebar becomes a drawer (slides in from left, overlay backdrop)
+
+Row Level Security (RLS):
+  Every table has RLS enabled
+  Users can only access rows where organization_id matches their organization
+  Use Supabase auth.uid() to look up the user's organization_id in users table for all policies
+
+Data exports:
+  CSV and PDF export available on: Entries, Tax History, Reminders, Audit Log, POS Sales History, Analytics
+
+Demo data on first login:
+  After completing registration and payment, pre-populate the organization with:
+  3 sample income/expense entries (this month)
+  1 saved PAYE calculation
+  3 upcoming compliance reminders (VAT due, PAYE due, WHT due)
+  This ensures the dashboard is not empty and users can explore immediately
+
+Environment variables required:
+  VITE_SUPABASE_URL         = https://xgicdlwxjkqtarfytbgz.supabase.co
+  VITE_SUPABASE_ANON_KEY    = (from Supabase project settings)
+  PAYSTACK_SECRET_KEY       = (server-side only, never in VITE_ variables)
+  RESEND_API_KEY            = (Supabase edge function secret)
+  OPENAI_API_KEY            = (Supabase edge function secret)
+  SUPABASE_SERVICE_ROLE_KEY = (Supabase edge function secret only)
+
+Auth redirect URLs (add to Supabase Dashboard → Auth → URL Configuration):
+  https://www.taxwise.com.ng
+  http://localhost:5173 (for local development)
+
+IMPORTANT — After payment success:
+  Do NOT require the user to log out and log back in for features to unlock.
+  Immediately after finalize() completes:
+    Call useAuthStore.getState().updateOrganization({ subscription_status, subscription_tier, trial_ends_at })
+    Call applyFeatureFlags(plan) to update the features store
+  This ensures ProtectedRoute and all feature gates reflect the new subscription instantly.
