@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import {
   HelpCircle,
   Bell,
@@ -350,6 +351,9 @@ const TaxCalculator = () => {
       return;
     }
 
+    // netTaxPayable is optional.
+    // Some deployed schemas don't have `net_tax_payable` at the column level.
+    // We use it only for local/UI display and fall back to summary values.
     const netTaxPayable =
       result.summary?.totalTaxLiability ||
       result.summary?.netTaxPayable ||
@@ -362,22 +366,31 @@ const TaxCalculator = () => {
     const inputData = taxType === 'paye' ? payeData : taxType === 'cit' ? citData : taxType === 'vat' ? vatData : whtData;
 
     const calcData = {
+      id: uuidv4(),
+      // reference_id column may not exist in some deployed schemas; keep payload aligned to existing columns.
+      // reference_id: uuidv4(),
       tax_type: taxType,
       fiscal_year: fiscalYear,
       input_data: inputData,
       result_data: result.summary,
       organization_id: organization?.id,
-      status: 'draft',
-      // Top-level columns for fast display in TaxHistory
-      net_tax_payable: netTaxPayable,
+      // status: 'posted',
+      status: 'posted',
       taxable_amount: result.summary?.taxableAmount || result.summary?.grossAmount || 0,
-      gross_amount: result.summary?.grossAmount || result.summary?.grossEmoluments || 0
+      gross_amount: result.summary?.grossAmount || result.summary?.grossEmoluments || 0,
+      // NOTE: net_tax_payable may not exist in deployed schema.
+      // It's optional and should not be sent if absent.
+      // reference_id/net_tax_payable are intentionally NOT sent unless they exist in DB.
+
+
+
     };
 
     const localCalc = {
       ...calcData,
-      id: `calc_${Date.now()}`,
+      id: uuidv4(),
       createdAt: new Date().toISOString(),
+      // local-only convenience field for UI
       net_tax_payable: netTaxPayable,
       taxable_amount: result.summary?.taxableAmount || 0,
       gross_amount: result.summary?.grossAmount || 0

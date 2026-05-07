@@ -436,7 +436,7 @@ const PaymentForm = ({
                 type="text" inputMode="numeric"
                 value={cardNum}
                 onChange={e => setCardNum(fmt4(e.target.value))}
-                placeholder="1234 5678 9012 3456"
+
                 maxLength={19}
                 style={{ ...s.input, paddingLeft: 40, ...(errors.cardNum && s.inputErr) }}
               />

@@ -55,16 +55,27 @@ const Dashboard = () => {
       return db - da;
     });
     const latestCalc = sortedCalcs[0];
-    const totalTaxLiability = parseFloat(
-      latestCalc?.net_tax_payable ??
-      latestCalc?.netTaxPayable ??
-      latestCalc?.taxDue ??
-      latestCalc?.totalTaxLiability ??
-      latestCalc?.annualPAYE ??
-      latestCalc?.vatPayable ??
-      latestCalc?.whtAmount ??
-      0
-    ) || 0;
+    const getTaxPayable = (c) => {
+      const direct = c?.net_tax_payable ?? c?.netTaxPayable ?? c?.taxDue ?? c?.totalTaxLiability ?? c?.annualPAYE ?? c?.vatPayable ?? c?.whtAmount;
+      if (direct !== undefined && direct !== null && direct !== '') return parseFloat(direct) || 0;
+
+      const rd = c?.result_data ?? c?.resultData ?? null;
+      if (!rd) return 0;
+      return (
+        parseFloat(
+          rd.netTaxPayable ??
+          rd.totalTaxLiability ??
+          rd.taxDue ??
+          rd.annualPAYE ??
+          rd.vatPayable ??
+          rd.whtAmount ??
+          0
+        ) || 0
+      );
+    };
+
+    const totalTaxLiability = getTaxPayable(latestCalc);
+
 
     const netCashFlow = allTimeIncome - allTimeExpenses;
     const netTaxable = allTimeIncome - totalDeductions;

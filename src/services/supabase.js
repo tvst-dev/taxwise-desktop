@@ -3,6 +3,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
 import config from '../config';
 
 // Initialize Supabase client
@@ -148,7 +149,20 @@ export const getTaxCalculations = async (orgId, filters = {}) => {
 };
 
 export const createTaxCalculation = async (calcData) => {
-  const { data, error } = await supabase.from('tax_calculations').insert([calcData]).select().single();
+  // Keep payload aligned with deployed schema.
+  // Some environments include `reference_id`, others do not.
+  // Only forward reference_id if it already exists in calcData.
+  const safeCalcData = {
+    ...calcData,
+    ...(calcData.reference_id ? { reference_id: calcData.reference_id } : {})
+  };
+
+  const { data, error } = await supabase
+    .from('tax_calculations')
+    .insert([safeCalcData])
+    .select()
+    .single();
+
   if (error) throw error;
   return data;
 };

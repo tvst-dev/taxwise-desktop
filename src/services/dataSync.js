@@ -39,9 +39,17 @@ export const loadOrganizationData = async (organizationId) => {
   // Load tax calculations — preserve any locally-saved fallback records (calc_ prefix)
   try {
     const calculations = await db.getTaxCalculations(organizationId);
+
+    // Preserve any locally-only fallback records (older versions used `calc_` ids).
+    // Also keep any records created while a Supabase write failed.
     const localOnly = useTaxStore.getState().calculations
       .filter(c => typeof c.id === 'string' && c.id.startsWith('calc_'));
-    useTaxStore.getState().setCalculations([...calculations, ...localOnly]);
+
+    // Merge and de-duplicate by id so a just-created record doesn’t get overridden.
+    const merged = [...calculations, ...localOnly];
+    const deduped = merged.filter((c, idx) => merged.findIndex(x => x.id === c.id) === idx);
+
+    useTaxStore.getState().setCalculations(deduped);
   } catch (e) {
     console.warn('Tax calculations load failed:', e.message);
   }

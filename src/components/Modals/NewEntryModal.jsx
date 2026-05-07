@@ -55,7 +55,7 @@ const NewEntryModal = () => {
 
   const paymentMethods = [
     { id: 'bank_transfer', name: 'Bank Transfer', icon: Building },
-    { id: 'corporate_card', name: 'Corporate Card ••4291', icon: CreditCard },
+    { id: 'corporate_card', name: 'Corporate Card', icon: CreditCard },
     { id: 'cash', name: 'Cash', icon: FileText },
     { id: 'pos', name: 'POS Terminal', icon: CreditCard }
   ];

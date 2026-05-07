@@ -503,7 +503,7 @@ export const useTaxStore = create(
       setCalculations: (calculations) => set({ calculations }),
       
       addCalculation: (calculation) => set((state) => {
-        const id = calculation.id || `calc_${Date.now()}`;
+        const id = calculation.id || calculation.reference_id || uuidv4();
         if (state.calculations.some(c => c.id === id)) return state;
         return {
           calculations: [{ ...calculation, id, createdAt: calculation.createdAt || new Date().toISOString() }, ...state.calculations]

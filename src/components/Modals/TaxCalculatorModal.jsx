@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { X, Calculator, ChevronDown, Download, RefreshCw } from 'lucide-react';
 import { useUIStore, useTaxStore, useAuthStore } from '../../store';
 import { createTaxCalculation } from '../../services/supabase';
@@ -166,19 +167,24 @@ const TaxCalculatorModal = () => {
       : whtData;
 
     const calcData = {
+      id: uuidv4(),
+      reference_id: uuidv4(),
       tax_type: taxType,
       fiscal_year: fiscalYear,
       input_data: inputData,
       result_data: result.summary,
       organization_id: organization?.id,
-      status: 'draft'
+      status: 'posted',
+      taxable_amount: result.summary?.taxableAmount || 0,
+      gross_amount: result.summary?.grossAmount || 0,
+      net_tax_payable: result.summary?.netTaxPayable || 0
     };
 
     const localCalc = {
       ...calcData,
-      id: `calc_${Date.now()}`,
+      id: uuidv4(),
       createdAt: new Date().toISOString(),
-      net_tax_payable: netTaxPayable,
+
       taxable_amount: result.summary?.taxableAmount || 0,
       gross_amount: result.summary?.grossAmount || 0
     };

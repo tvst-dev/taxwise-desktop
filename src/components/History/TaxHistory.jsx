@@ -58,7 +58,18 @@ const TaxHistory = () => {
 
   // Calculate summary stats
   const summaryStats = useMemo(() => {
-    const total = calculations.reduce((sum, c) => sum + (parseFloat(c.net_tax_payable) || 0), 0);
+    const getTaxPayable = (c) => {
+      const direct = c.net_tax_payable ?? c.netTaxPayable ?? c.taxDue ?? c.totalTaxLiability ?? c.annualPAYE;
+      if (direct !== undefined && direct !== null && direct !== '') return parseFloat(direct) || 0;
+
+      const rd = c.result_data ?? c.resultData ?? null;
+      if (!rd) return 0;
+      return (
+        parseFloat(rd.netTaxPayable ?? rd.totalTaxLiability ?? rd.taxDue ?? rd.annualPAYE ?? rd.vatPayable ?? rd.whtAmount ?? 0) || 0
+      );
+    };
+
+    const total = calculations.reduce((sum, c) => sum + getTaxPayable(c), 0);
     const pending = calculations.filter(c => c.status === 'pending').length;
     const filed = calculations.filter(c => c.status === 'filed' || c.status === 'paid').length;
     const draft = calculations.filter(c => c.status === 'draft' || !c.status).length;
@@ -314,7 +325,9 @@ const TaxHistory = () => {
                     <td style={styles.td}>{getTaxTypeName(calc.tax_type)}</td>
                     <td style={styles.td}>{formatCurrency(calc.taxable_amount || calc.taxable_income || calc.gross_amount)}</td>
                     <td style={{ ...styles.td, fontWeight: '600' }}>
-                      {formatCurrency(calc.net_tax_payable)}
+                      {formatCurrency(
+                        calc.net_tax_payable ?? calc.netTaxPayable ?? calc.taxDue ?? calc.totalTaxLiability ?? calc.annualPAYE ?? calc.vatPayable ?? calc.whtAmount ?? calc.result_data?.netTaxPayable ?? calc.result_data?.totalTaxLiability ?? calc.result_data?.taxDue ?? calc.result_data?.annualPAYE ?? calc.result_data?.vatPayable ?? calc.result_data?.whtAmount ?? 0
+                      )}
                     </td>
                     <td style={styles.td}>
                       <span style={{ ...styles.statusBadge, ...getStatusStyle(calc.status) }}>
